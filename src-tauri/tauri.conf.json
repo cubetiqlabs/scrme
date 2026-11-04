@@ -31,8 +31,25 @@
     "shortDescription": "Tiny, fast screenshot app for the menu bar",
     "longDescription": "scrme is a tiny, fast, open-source screenshot app. Press a shortcut, drag an area, and it is on your clipboard. Includes a quick annotation editor and in-app updates.",
     "homepage": "https://github.com/cubetiqlabs/scrme",
-    "license": "MIT",
-    "licenseFile": "../LICENSE"
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "12.0",
+      "dmg": {
+        "background": "dmg/background.png",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 200
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 200
+        }
+      }
+    }
   },
   "plugins": {
     "updater": {

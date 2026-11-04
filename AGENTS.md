@@ -56,6 +56,10 @@ secret (maintainer keeps a backup; never commit it). `createUpdaterArtifacts` is
 `cargo tauri build` needs `TAURI_SIGNING_PRIVATE_KEY` set; use `cargo tauri dev` or `cargo build` instead.
 Logic lives in the "updates" section of `lib.rs` (`run_update`).
 
+## macOS signing
+
+Release builds are **ad-hoc signed** (`bundle.macOS.signingIdentity: "-"`), not notarized. Without any signature, a quarantined download shows "scrme is damaged". Ad-hoc signing changes the code identity on every build, so macOS may re-ask for Screen Recording after an update; real fix is an Apple Developer ID + notarization (set `APPLE_*` secrets in release.yml). DMG layout/background: `src-tauri/dmg/background.png`, rendered from `design/dmg/background.html` (headless Chrome, 2x, 144 dpi).
+
 ## Releasing
 
 `scripts/release.sh [patch|minor|major|X.Y.Z]` bumps the version in `src-tauri/Cargo.toml` and

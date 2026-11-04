@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:660px;height:400px;overflow:hidden}
+body{position:relative;font-family:-apple-system,"SF Pro Rounded","Helvetica Neue",sans-serif;color:#3b2a6b;
+  background:radial-gradient(circle at 15% 10%,#ffe3f6 0,#fff7fd 38%,transparent 60%),radial-gradient(circle at 90% 95%,#e5ddff 0,#f4f0ff 45%,transparent 70%),#faf6ff}
+.title{position:absolute;top:26px;left:0;right:0;text-align:center}
+.title h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.3px}
+.title p{margin:4px 0 0;font-size:13px;color:#8b84a3}
+.mascot{position:absolute;left:50%;top:-6px;width:0}
+svg.arrow{position:absolute;left:245px;top:152px;width:170px;height:80px;overflow:visible}
+.hint{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:11.5px;color:#9a93b3}
+.hint b{color:#7c5cff}
+.sp{position:absolute;color:#ff8ad4;font-size:14px}
+</style>
+<div class="title">
+  <h1>Drag <span style="color:#7c5cff">scrme</span> to Applications</h1>
+  <p>and you're ready to snap ✦</p>
+</div>
+<span class="sp" style="left:96px;top:60px;font-size:12px">✦</span>
+<span class="sp" style="left:556px;top:92px;color:#7c5cff;font-size:10px">✦</span>
+<span class="sp" style="left:330px;top:112px;font-size:11px">✦</span>
+<span class="sp" style="left:58px;top:310px;color:#7c5cff;font-size:9px">✦</span>
+<span class="sp" style="left:590px;top:300px;font-size:13px">✦</span>
+<svg class="arrow" viewBox="0 0 170 80" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff8ad4"/><stop offset="1" stop-color="#7c5cff"/></linearGradient></defs>
+  <path d="M6 52 C 40 4, 110 4, 148 44" stroke="url(#g)" stroke-width="5" stroke-dasharray="1 11"/>
+  <path d="M152 36.5 L156 52 L140.4 48.6" stroke="#7c5cff" stroke-width="5"/>
+  <!-- tiny cute face riding the arrow -->
+  <g transform="translate(64 -9)">
+    <circle cx="14" cy="14" r="14" fill="#fff4fb" stroke="#e7dcff" stroke-width="1.5"/>
+    <path d="M7.5 12.5q2-2.6 4 0M16.5 12.5q2-2.6 4 0" stroke="#3b2a6b" stroke-width="1.9" fill="none"/>
+    <ellipse cx="6.5" cy="17.5" rx="2.4" ry="1.5" fill="#ffa3c4" stroke="none"/><ellipse cx="21.5" cy="17.5" rx="2.4" ry="1.5" fill="#ffa3c4" stroke="none"/>
+    <path d="M11 17.5q3 3.4 6 0" stroke="#3b2a6b" stroke-width="1.8" fill="none"/>
+  </g>
+</svg>
+<div class="hint">If macOS says it's damaged, run <b>xattr -dr com.apple.quarantine /Applications/scrme.app</b></div>
