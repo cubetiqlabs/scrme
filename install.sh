@@ -17,7 +17,7 @@ esac
 API="https://api.github.com/repos/$REPO/releases/${VERSION:+tags/$VERSION}"
 [ -n "${VERSION:-}" ] || API="https://api.github.com/repos/$REPO/releases/latest"
 
-echo "→ Finding the latest scrme release…"
+echo "→ Finding the latest scrme release..."
 URL=$(curl -fsSL "$API" | grep -o "https://[^\"]*_${ARCH}\.dmg" | head -n1 || true)
 [ -n "$URL" ] || { echo "No .dmg found for $ARCH. See https://github.com/$REPO/releases" >&2; exit 1; }
 
@@ -26,13 +26,13 @@ MNT="$TMP/mnt"
 cleanup() { hdiutil detach "$MNT" -quiet 2>/dev/null || true; rm -rf "$TMP"; }
 trap cleanup EXIT
 
-echo "→ Downloading $(basename "$URL")…"
+echo "→ Downloading $(basename "$URL")..."
 curl -fL --progress-bar -o "$TMP/scrme.dmg" "$URL"
 
 mkdir -p "$MNT"
 hdiutil attach "$TMP/scrme.dmg" -nobrowse -quiet -mountpoint "$MNT"
 
-echo "→ Installing to $DEST…"
+echo "→ Installing to ${DEST}..."
 mkdir -p "$DEST"
 pkill -x scrme 2>/dev/null || true
 rm -rf "${DEST:?}/$APP"
