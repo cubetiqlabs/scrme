@@ -16,6 +16,9 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_INCREMENTAL: 0
+
 jobs:
   prepare:
     name: Version & tag
@@ -59,14 +62,17 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.target }}
-      - name: Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update bundles; the matching public key is in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: src-tauri
-          tauriScript: cargo tauri
+          # Prebuilt CLI via npx (seconds) instead of compiling tauri-cli (minutes).
+          tauriScript: npx --yes @tauri-apps/cli@2
+          includeUpdaterJson: true
           tagName: ${{ needs.prepare.outputs.tag }}
           releaseName: scrme ${{ needs.prepare.outputs.tag }}
           releaseBody: |

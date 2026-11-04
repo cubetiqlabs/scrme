@@ -32,6 +32,8 @@ h2{margin:18px 4px 8px;font:700 11px var(--font);letter-spacing:.8px;text-transf
 footer{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:0 4px;color:var(--mut);font-size:12px}
 #msg{transition:opacity .2s;opacity:0}
 #msg.show{opacity:1}#msg.err{color:#e5484d}#msg.ok{color:#2a9d57}
+.btn{background:var(--grad);color:#fff;border:0;border-radius:9px;padding:6px 13px;font:700 12px var(--font);cursor:pointer;box-shadow:0 2px 8px #7c5cff44}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.6;cursor:default}
 button.link{background:none;border:0;color:var(--ac);font:600 12px var(--font);cursor:pointer;padding:4px 6px;border-radius:6px}
 button.link:hover{background:var(--chip)}
 .tip{margin:12px 4px 0;color:var(--mut);font-size:11.5px;line-height:1.5}
@@ -53,6 +55,12 @@ button.link:hover{background:var(--chip)}
 <div class="card">
   <label class="row"><span><b>Success animation</b><small>A tiny cheer when it's copied</small></span><input type="checkbox" class="sw" id="animation"></label>
   <label class="row"><span><b>Also save a PNG</b><small>To ~/Pictures/scrme · quick captures</small></span><input type="checkbox" class="sw" id="autosave"></label>
+</div>
+
+<h2>Updates</h2>
+<div class="card">
+  <label class="row"><span><b>Check automatically</b><small>On launch and every few hours</small></span><input type="checkbox" class="sw" id="auto_update"></label>
+  <div class="row"><span><b id="upd">scrme</b><small id="updsub">&nbsp;</small></span><button class="btn" id="check">Check now</button></div>
 </div>
 
 <p class="tip">Click a shortcut, then press the new keys. Include ⌘ ⌃ ⌥ or ⇧. Esc cancels.<br>Hold ⇧ while releasing an area selection to open the editor.</p>

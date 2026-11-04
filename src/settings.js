@@ -25,7 +25,7 @@ function render() {
     b.onclick = () => { recording = k; render(); };
     row.append(l, b); box.append(row);
   }
-  $('animation').checked = cfg.animation; $('autosave').checked = cfg.autosave;
+  $('animation').checked = cfg.animation; $('autosave').checked = cfg.autosave; $('auto_update').checked = cfg.auto_update;
 }
 
 // KeyboardEvent -> tauri accelerator string
@@ -55,8 +55,22 @@ addEventListener('keydown', e => {
   if (a) { const k = recording; recording = null; save({ ...cfg, [k]: a }); }
 });
 addEventListener('mousedown', e => { if (recording && !e.target.closest('.rec')) { recording = null; render(); } });
-for (const id of ['animation', 'autosave']) $(id).onchange = () => save({ ...cfg, [id]: $(id).checked });
+for (const id of ['animation', 'autosave', 'auto_update']) $(id).onchange = () => save({ ...cfg, [id]: $(id).checked });
 $('reset').onclick = async () => save(await invoke('default_config'));
 
 invoke('get_config').then(c => { cfg = c; render(); });
-window.__TAURI__.app?.getVersion().then(v => { $('ver').textContent = `Screenshots, instantly · v${v}`; });
+let readyVer = null;
+function showUpdate(v) {
+  readyVer = v;
+  $('check').textContent = v ? 'Restart now' : 'Check now';
+  $('updsub').textContent = v ? `v${v} is installed — restart to finish` : 'You have the latest version';
+}
+$('check').onclick = async () => {
+  if (readyVer) return invoke('restart_app');
+  const b = $('check'); b.disabled = true; $('updsub').textContent = 'Checking…';
+  try { showUpdate(await invoke('check_update')); }
+  catch (e) { $('updsub').textContent = 'Couldn\'t check — ' + e; }
+  b.disabled = false;
+};
+window.__TAURI__.app?.getVersion().then(v => { $('ver').textContent = `Screenshots, instantly · v${v}`; $('upd').textContent = `Version ${v}`; });
+invoke('update_ready').then(v => v && showUpdate(v));

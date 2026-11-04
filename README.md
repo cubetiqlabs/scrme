@@ -11,6 +11,7 @@ Tiny, fast screenshot app for the menu bar. Press a shortcut, drag an area, and 
 - **Quick editor** — arrows, boxes, text, highlight, blur, numbered markers, undo/redo.
 - **Preferences** — rebind shortcuts live, optional auto-save to `~/Pictures/scrme`.
 - **Cute success animation** when a capture is copied.
+- **Auto-update** — checks in the background, or use **Check for Updates…** in the tray menu.
 
 | Action | Default shortcut |
 | --- | --- |
