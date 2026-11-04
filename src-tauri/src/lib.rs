@@ -6,7 +6,7 @@ use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::image::Image;
 use tauri::ipc::Response;
-use tauri::menu::{IconMenuItem, Menu, PredefinedMenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
@@ -182,6 +182,15 @@ const TOAST_H: f64 = 44.0;
 static TOAST_GEN: AtomicU32 = AtomicU32::new(0);
 
 fn show_toast(app: &AppHandle, text: &str) {
+    show_toast_kind(app, "ok", text);
+}
+
+/// Sad, red variant for failures.
+fn show_toast_err(app: &AppHandle, text: &str) {
+    show_toast_kind(app, "err", text);
+}
+
+fn show_toast_kind(app: &AppHandle, kind: &str, text: &str) {
     let Some(w) = app
         .get_webview_window("toast")
         .or_else(|| build_toast(app).ok())
@@ -196,9 +205,10 @@ fn show_toast(app: &AppHandle, text: &str) {
     }
     let id = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
     let _ = w.show();
-    let _ = w.eval(format!("window.__play&&window.__play({text:?})"));
+    let _ = w.eval(format!("window.__play&&window.__play({text:?},{kind:?})"));
+    let ms = if kind == "err" { 2100 } else { 1500 };
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(1500));
+        std::thread::sleep(Duration::from_millis(ms));
         if TOAST_GEN.load(Ordering::SeqCst) == id {
             let _ = w.hide();
         }
@@ -259,6 +269,7 @@ fn start_area_capture(app: &AppHandle) {
     let Some(mon) = primary_monitor() else { return };
     let Ok(img) = mon.capture_image() else {
         eprintln!("capture failed (Screen Recording permission?)");
+        show_toast_err(app, "Capture failed");
         return;
     };
     let scale = mon.scale_factor().unwrap_or(1.0) as f64;
@@ -284,8 +295,9 @@ fn start_area_capture(app: &AppHandle) {
 }
 
 fn capture_full(app: &AppHandle) {
-    if let Some(img) = primary_monitor().and_then(|m| m.capture_image().ok()) {
-        finish(app, img);
+    match primary_monitor().and_then(|m| m.capture_image().ok()) {
+        Some(img) => finish(app, img),
+        None => show_toast_err(app, "Capture failed"),
     }
 }
 
@@ -295,8 +307,9 @@ fn capture_window(app: &AppHandle) {
         w.into_iter()
             .find(|w| w.is_focused().unwrap_or(false) && !w.is_minimized().unwrap_or(true))
     });
-    if let Some(img) = win.and_then(|w| w.capture_image().ok()) {
-        finish(app, img);
+    match win.and_then(|w| w.capture_image().ok()) {
+        Some(img) => finish(app, img),
+        None => show_toast_err(app, "No window found"),
     }
 }
 
@@ -416,8 +429,31 @@ fn set_config(app: AppHandle, state: tauri::State<Settings>, cfg: Config) -> Res
     }
     *state.keys.lock().unwrap() = new;
     let _ = write_config(&app, &cfg);
+    sync_menu_keys(&app, &cfg);
     *state.cfg.lock().unwrap() = cfg;
     Ok(())
+}
+
+// ───────────────────────── tray menu ─────────────────────────
+
+/// Capture items whose native (gray) shortcut hint follows the config.
+struct TrayKeys {
+    area: MenuItem<tauri::Wry>,
+    full: MenuItem<tauri::Wry>,
+    window: MenuItem<tauri::Wry>,
+}
+
+fn sync_menu_keys(app: &AppHandle, cfg: &Config) {
+    let Some(t) = app.try_state::<TrayKeys>() else {
+        return;
+    };
+    for (item, key) in [
+        (&t.area, &cfg.area),
+        (&t.full, &cfg.full),
+        (&t.window, &cfg.window),
+    ] {
+        let _ = item.set_accelerator(Some(key.as_str()));
+    }
 }
 
 // ───────────────────────── updates ─────────────────────────
@@ -428,7 +464,7 @@ struct UpdateState {
     /// Version already downloaded + installed on disk, waiting for a restart.
     ready: Mutex<Option<String>>,
     busy: AtomicBool,
-    item: Mutex<Option<IconMenuItem<tauri::Wry>>>,
+    item: Mutex<Option<MenuItem<tauri::Wry>>>,
 }
 
 async fn do_update(app: &AppHandle, manual: bool) -> Result<Option<String>, String> {
@@ -451,7 +487,7 @@ async fn do_update(app: &AppHandle, manual: bool) -> Result<Option<String>, Stri
     let st = app.state::<UpdateState>();
     *st.ready.lock().unwrap() = Some(v.clone());
     if let Some(item) = st.item.lock().unwrap().as_ref() {
-        let _ = item.set_text(format!("Restart to update to v{v}"));
+        let _ = item.set_text(format!("↻  Restart to update to v{v}"));
     }
     show_toast(app, "Restart to update");
     Ok(Some(v))
@@ -471,7 +507,7 @@ async fn run_update(app: &AppHandle, manual: bool) -> Result<Option<String>, Str
     if let Err(e) = &res {
         eprintln!("update check failed: {e}");
         if manual {
-            show_toast(app, "Update failed");
+            show_toast_err(app, "Update failed");
         }
     }
     res
@@ -560,53 +596,35 @@ pub fn run() {
                 keys: Mutex::new(keys),
             });
 
-            let item = |id: &str, label: &str, png: &[u8]| -> tauri::Result<IconMenuItem<_>> {
-                IconMenuItem::with_id(
-                    app,
-                    id,
-                    label,
-                    true,
-                    Some(Image::from_bytes(png)?),
-                    None::<&str>,
-                )
+            // NSMenuItem images don't render in status-item menus on recent macOS,
+            // so icons are Unicode glyph prefixes; shortcuts are native accelerators (gray).
+            let cfg = app.state::<Settings>().cfg.lock().unwrap().clone();
+            let item = |id: &str, label: &str, key: Option<&str>| {
+                MenuItem::with_id(app, id, label, true, key)
             };
-            let upd = item(
-                "update",
-                "Check for Updates…",
-                include_bytes!("../icons/menu/update.png"),
-            )?;
+            let area = item("area", "⛶  Capture Area", Some(&cfg.area))?;
+            let full = item("full", "▭  Capture Screen", Some(&cfg.full))?;
+            let window = item("window", "❏  Capture Window", Some(&cfg.window))?;
+            let upd = item("update", "↻  Check for Updates…", None)?;
+            let prefs = item("prefs", "⚙︎  Preferences…", Some("Cmd+,"))?;
+            let quit = item("quit", "⏻  Quit scrme", Some("Cmd+Q"))?;
             *app.state::<UpdateState>().item.lock().unwrap() = Some(upd.clone());
+            app.manage(TrayKeys {
+                area: area.clone(),
+                full: full.clone(),
+                window: window.clone(),
+            });
             let menu = Menu::with_items(
                 app,
                 &[
-                    &item(
-                        "area",
-                        "Capture Area",
-                        include_bytes!("../icons/menu/area.png"),
-                    )?,
-                    &item(
-                        "full",
-                        "Capture Screen",
-                        include_bytes!("../icons/menu/screen.png"),
-                    )?,
-                    &item(
-                        "window",
-                        "Capture Window",
-                        include_bytes!("../icons/menu/window.png"),
-                    )?,
+                    &area,
+                    &full,
+                    &window,
                     &PredefinedMenuItem::separator(app)?,
                     &upd,
-                    &item(
-                        "prefs",
-                        "Preferences…",
-                        include_bytes!("../icons/menu/prefs.png"),
-                    )?,
+                    &prefs,
                     &PredefinedMenuItem::separator(app)?,
-                    &item(
-                        "quit",
-                        "Quit scrme",
-                        include_bytes!("../icons/menu/quit.png"),
-                    )?,
+                    &quit,
                 ],
             )?;
             TrayIconBuilder::new()

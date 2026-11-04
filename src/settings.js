@@ -60,17 +60,21 @@ $('reset').onclick = async () => save(await invoke('default_config'));
 
 invoke('get_config').then(c => { cfg = c; render(); });
 let readyVer = null;
+const sub = (t, cls = '') => { $('updsub').textContent = t; $('updsub').className = cls; };
 function showUpdate(v) {
   readyVer = v;
   $('check').textContent = v ? 'Restart now' : 'Check now';
-  $('updsub').textContent = v ? `v${v} is installed — restart to finish` : 'You have the latest version';
+  v ? sub(`v${v} is installed, restart to finish`, 'good') : sub('You have the latest version', 'good');
 }
 $('check').onclick = async () => {
   if (readyVer) return invoke('restart_app');
-  const b = $('check'); b.disabled = true; $('updsub').textContent = 'Checking…';
-  try { showUpdate(await invoke('check_update')); }
-  catch (e) { $('updsub').textContent = 'Couldn\'t check — ' + e; }
-  b.disabled = false;
+  const b = $('check');
+  b.disabled = true; b.classList.add('busy'); b.textContent = 'Checking'; sub('Looking for updates…');
+  const min = new Promise(r => setTimeout(r, 700)); // avoid a flicker on instant results
+  try { const v = await invoke('check_update'); await min; showUpdate(v); }
+  catch (e) { await min; b.textContent = 'Try again'; sub('Couldn\'t check for updates. Are you online?', 'bad'); $('updsub').title = String(e); }
+  b.disabled = false; b.classList.remove('busy');
+  if (!readyVer && b.textContent === 'Checking') b.textContent = 'Check now';
 };
 window.__TAURI__.app?.getVersion().then(v => { $('ver').textContent = `Screenshots, instantly · v${v}`; $('upd').textContent = `Version ${v}`; });
 invoke('update_ready').then(v => v && showUpdate(v));
