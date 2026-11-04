@@ -24,7 +24,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "publisher": "Sambo Chea",
+    "copyright": "Copyright \u00a9 2026 Sambo Chea. MIT License.",
+    "category": "Productivity",
+    "shortDescription": "Tiny, fast screenshot app for the menu bar",
+    "longDescription": "scrme is a tiny, fast, open-source screenshot app. Press a shortcut, drag an area, and it is on your clipboard. Includes a quick annotation editor and in-app updates.",
+    "homepage": "https://github.com/cubetiqlabs/scrme",
+    "license": "MIT",
+    "licenseFile": "../LICENSE"
   },
   "plugins": {
     "updater": {

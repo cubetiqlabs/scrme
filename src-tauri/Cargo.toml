@@ -1,8 +1,14 @@
 [package]
 name = "scrme"
 version = "0.1.1"
-description = "A Tauri App"
-authors = ["you"]
+description = "Tiny, fast screenshot app for the menu bar"
+authors = ["Sambo Chea"]
+license = "MIT"
+repository = "https://github.com/cubetiqlabs/scrme"
+homepage = "https://github.com/cubetiqlabs/scrme"
+readme = "../README.md"
+keywords = ["screenshot", "screen-capture", "tauri", "macos"]
+categories = ["multimedia"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
