@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Preferences</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+body{background:var(--bg);color:var(--fg);font-size:13px;padding:0 20px 20px;user-select:none;cursor:default}
+header{display:flex;align-items:center;gap:12px;margin:0 -20px 18px;padding:20px;background:var(--grad);color:#fff}
+header .mascot{width:44px;height:44px;filter:drop-shadow(0 3px 6px #3b2a6b44)}
+header h1{margin:0;font:800 19px var(--font);letter-spacing:-.2px}
+header p{margin:2px 0 0;opacity:.85;font-size:12px}
+h2{margin:18px 4px 8px;font:700 11px var(--font);letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px}
+.row+.row{border-top:1px solid var(--line)}
+.row small{display:block;color:var(--mut);font-size:11.5px;margin-top:1px}
+.ic{width:18px;height:18px;margin-right:9px;vertical-align:-4px;opacity:.9}
+.lbl{display:flex;align-items:center}
+/* shortcut keycaps */
+.keys{display:flex;gap:4px;border:0;background:none;padding:4px 6px;border-radius:9px;cursor:pointer;font:inherit}
+.keys:hover{background:var(--chip)}
+.cap{min-width:24px;height:24px;padding:0 6px;display:grid;place-items:center;border-radius:7px;background:var(--chip);
+  border:1px solid var(--line);border-bottom-width:2px;font:600 12px var(--font);color:var(--fg)}
+.keys.rec{background:var(--chip);outline:2px solid var(--ac);color:var(--ac);animation:pulse 1.1s infinite}
+.keys.rec .cap{display:none}
+.keys .hint{display:none;color:var(--ac);font-weight:600;padding:0 6px;line-height:24px}
+.keys.rec .hint{display:block}
+@keyframes pulse{50%{outline-color:#7c5cff44}}
+/* switch */
+.sw{appearance:none;flex:none;width:40px;height:24px;border-radius:12px;background:var(--line);position:relative;cursor:pointer;transition:background .18s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
+.sw:checked{background:var(--grad)}
+.sw:checked::after{transform:translateX(16px)}
+footer{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:0 4px;color:var(--mut);font-size:12px}
+#msg{transition:opacity .2s;opacity:0}
+#msg.show{opacity:1}#msg.err{color:#e5484d}#msg.ok{color:#2a9d57}
+button.link{background:none;border:0;color:var(--ac);font:600 12px var(--font);cursor:pointer;padding:4px 6px;border-radius:6px}
+button.link:hover{background:var(--chip)}
+.tip{margin:12px 4px 0;color:var(--mut);font-size:11.5px;line-height:1.5}
+</style></head>
+<body>
+<header>
+  <svg class="mascot" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#fff4fb"/>
+    <ellipse cx="14" cy="18" rx="2.4" ry="3.3" fill="#3b2a6b"/><ellipse cx="26" cy="18" rx="2.4" ry="3.3" fill="#3b2a6b"/>
+    <circle cx="14.8" cy="16.8" r=".9" fill="#fff"/><circle cx="26.8" cy="16.8" r=".9" fill="#fff"/>
+    <ellipse cx="9.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/><ellipse cx="30.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/>
+    <path d="M15.5 24.5q4.5 5 9 0" fill="none" stroke="#3b2a6b" stroke-width="2.4" stroke-linecap="round"/></svg>
+  <div><h1>scrme</h1><p id="ver">Screenshots, instantly</p></div>
+</header>
+
+<h2>Shortcuts</h2>
+<div class="card" id="keys"></div>
+
+<h2>After capture</h2>
+<div class="card">
+  <label class="row"><span><b>Success animation</b><small>A tiny cheer when it's copied</small></span><input type="checkbox" class="sw" id="animation"></label>
+  <label class="row"><span><b>Also save a PNG</b><small>To ~/Pictures/scrme · quick captures</small></span><input type="checkbox" class="sw" id="autosave"></label>
+</div>
+
+<p class="tip">Click a shortcut, then press the new keys. Include ⌘ ⌃ ⌥ or ⇧. Esc cancels.<br>Hold ⇧ while releasing an area selection to open the editor.</p>
+
+<footer><span id="msg">Saved</span><button class="link" id="reset">Reset to defaults</button></footer>
+<script src="settings.js"></script>
+</body></html>

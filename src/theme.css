@@ -1,0 +1,13 @@
+/* Shared look for toast + preferences: one palette, one mascot. */
+:root{
+  --pink:#ff8ad4; --ac:#7c5cff; --ink:#3b2a6b; --blush:#ffa3c4; --face:#fff4fb;
+  --grad:linear-gradient(135deg,var(--pink),var(--ac));
+  --bg:#faf8ff; --card:#fff; --line:#ece7ff; --fg:#2a2240; --mut:#8b84a3; --chip:#f3efff;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Rounded","Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#171420; --card:#221e30; --line:#332e47; --fg:#f1eefc; --mut:#9c95b5; --chip:#2d2840;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;font-family:var(--font);-webkit-font-smoothing:antialiased}
+.mascot{display:block;flex:none}

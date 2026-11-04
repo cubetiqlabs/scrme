@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>editor</title>
+<style>
+html,body{margin:0;height:100%;background:#1e1e1e;font:13px -apple-system,sans-serif;color:#ddd}
+#bar{height:48px;display:flex;align-items:center;gap:6px;padding:0 10px;box-sizing:border-box;background:#2b2b2b}
+button{background:#3a3a3a;color:#ddd;border:0;border-radius:5px;padding:5px 9px;cursor:pointer}
+button.on{background:#2f7df6;color:#fff}
+input[type=color]{width:28px;height:26px;border:0;background:none;padding:0}
+.sp{flex:1}
+#wrap{height:calc(100% - 48px);overflow:auto;display:flex}
+canvas{margin:auto;max-width:100%;max-height:100%;cursor:crosshair}
+</style></head>
+<body>
+<div id="bar">
+  <span id="tools"></span>
+  <input type="color" id="col" value="#ff3b30">
+  <button id="undo">↶</button><button id="redo">↷</button>
+  <span class="sp"></span>
+  <span id="msg"></span>
+  <button id="copy">Copy ⌘C</button><button id="save">Save ⌘S</button>
+</div>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script src="editor.js"></script>
+</body></html>
