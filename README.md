@@ -29,6 +29,11 @@ curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/scrme/main/install.sh |
 
 Or grab the `.dmg` from [Releases](https://github.com/cubetiqlabs/scrme/releases). On first capture, allow **Screen Recording** in System Settings → Privacy & Security.
 
+> **"scrme is damaged" or "can't be opened"?** Builds are not notarized yet, so macOS quarantines downloaded copies. The install script handles this. For the `.dmg`, either right-click the app → **Open**, or run:
+> ```sh
+> xattr -dr com.apple.quarantine /Applications/scrme.app
+> ```
+
 ## Getting started (from source)
 
 Needs [Rust](https://rustup.rs) and the Tauri CLI.
