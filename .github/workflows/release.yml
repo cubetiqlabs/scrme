@@ -12,6 +12,14 @@ on:
         type: choice
         options: [patch, minor, major]
         default: patch
+      force:
+        description: Override the tag if it already exists (force push)
+        type: boolean
+        default: false
+      dry_run:
+        description: Dry run (show what would happen, build nothing)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,7 +42,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          scripts/release.sh "${{ inputs.bump }}"
+          args=("${{ inputs.bump }}")
+          [ "${{ inputs.force }}" = "true" ] && args+=(--force)
+          [ "${{ inputs.dry_run }}" = "true" ] && args+=(--dry-run)
+          scripts/release.sh "${args[@]}"
       - name: Resolve tag
         id: tag
         run: |
@@ -47,6 +58,7 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     needs: prepare
+    if: ${{ !inputs.dry_run }}
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -72,7 +84,7 @@ jobs:
           projectPath: src-tauri
           # Prebuilt CLI via npx (seconds) instead of compiling tauri-cli (minutes).
           tauriScript: npx --yes @tauri-apps/cli@2
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
           tagName: ${{ needs.prepare.outputs.tag }}
           releaseName: scrme ${{ needs.prepare.outputs.tag }}
           releaseBody: |

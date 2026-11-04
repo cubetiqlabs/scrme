@@ -62,3 +62,5 @@ Logic lives in the "updates" section of `lib.rs` (`run_update`).
 `src-tauri/tauri.conf.json`, commits, tags `vX.Y.Z` and pushes. The tag triggers `release.yml`, which
 builds macOS dmgs + signed updater bundles and publishes a GitHub Release. The same workflow can be run from the Actions tab
 (`workflow_dispatch`) to bump + tag + build in one go.
+
+Flags: `--dry-run` (print the plan, change nothing), `--force` (re-use an existing tag: move it and force-push it, the branch with `--force-with-lease`), `--no-push`. The Actions form has the same `force` and `dry_run` options.
