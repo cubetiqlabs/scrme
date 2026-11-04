@@ -99,3 +99,8 @@ document.addEventListener('click', e => {
   const a = e.target.closest('[data-url]');
   if (a && a.dataset.url) { e.preventDefault(); invoke('open_url', { url: a.dataset.url }); }
 });
+
+// Save CPU: freeze the mascot loop whenever the window isn't visible or focused.
+const rest = () => document.body.classList.toggle('still', document.hidden || !document.hasFocus());
+for (const ev of ['focus', 'blur', 'visibilitychange']) addEventListener(ev, rest);
+rest();

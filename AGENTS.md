@@ -44,6 +44,10 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 Always use the **latest major version** of every action (e.g. `actions/checkout@v7`). Check with
 `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Dependabot also keeps them current.
 
+## Performance budget
+
+Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): app 31 MB + WebKit helpers ~47 MB physical footprint, 0.0% CPU. Keep it there: no polling loops (the only timer is the 6 h update check), animations are CSS transform/opacity only and pause when the window is unfocused/hidden (`body.still`), no animated blur, big buffers (the frozen frame) are `take()`n and dropped on commit/cancel, and the editor webview is destroyed on close. Check with `footprint -p <pid>` and `ps -o pcpu`.
+
 ## Preferences window
 
 Frameless (`decorations(false)` + transparent): `src/settings.html` draws its own rounded frame, a draggable header (`data-tauri-drag-region`, needs the `core:window:allow-start-dragging` permission in `capabilities/settings.json`) and a close button/Esc (`close_window` command). The About card reads `about_info`: commit and ISO-8601 UTC build time are embedded by `src-tauri/build.rs` (`SCRME_COMMIT`, `SCRME_BUILT`); links go through the allow-listed `open_url` command (github.com only).

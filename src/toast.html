@@ -38,7 +38,7 @@ body{display:grid;place-items:center}
     </g>
     <g class="sad">
       <path class="eye" d="M11 17.5q2.6 3.2 5.2 0M23.8 17.5q2.6 3.2 5.2 0" fill="none" stroke="#3b2a6b" stroke-width="2.6" stroke-linecap="round"/>
-      <path d="M11.5 13.5l4.6 1.6M28.5 13.5l-4.6 1.6" fill="none" stroke="#3b2a6b" stroke-width="2" stroke-linecap="round"/>
+      <path d="M11.5 15.2l4.6-1.7M28.5 15.2l-4.6-1.7" fill="none" stroke="#3b2a6b" stroke-width="2" stroke-linecap="round"/>
       <path d="M15.5 28.5q4.5-4.6 9 0" fill="none" stroke="#3b2a6b" stroke-width="2.4" stroke-linecap="round"/>
       <path class="tear" d="M30 22c-1.8 2.6-2.6 3.8-2.6 5a2.6 2.6 0 0 0 5.2 0c0-1.2-.8-2.4-2.6-5z" fill="#6cc4ff"/>
     </g>
@@ -53,4 +53,7 @@ window.__play = (text, kind) => {
   p.classList.toggle('err', kind === 'err');
   p.classList.remove('go'); void p.offsetWidth; p.classList.add('go'); // restart animation
 };
+// Built on demand: the first message arrives in the query string.
+const q = new URLSearchParams(location.search);
+if (q.has('t')) window.__play(q.get('t'), q.get('k'));
 </script></body></html>
