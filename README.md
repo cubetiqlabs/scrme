@@ -1,7 +1,53 @@
-# Tauri + Vanilla
+<p align="center"><img src="design/icon.png" width="96" alt="scrme"></p>
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+# scrme
 
-## Recommended IDE Setup
+Tiny, fast screenshot app for the menu bar. Press a shortcut, drag an area, and it's on your clipboard. Free and open source. Built with [Tauri](https://tauri.app) + Rust.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Features
+
+- **Instant area capture** — freeze the screen, drag, copied. No window, no Dock icon.
+- **Screen and window capture** with one shortcut each.
+- **Quick editor** — arrows, boxes, text, highlight, blur, numbered markers, undo/redo.
+- **Preferences** — rebind shortcuts live, optional auto-save to `~/Pictures/scrme`.
+- **Cute success animation** when a capture is copied.
+
+| Action | Default shortcut |
+| --- | --- |
+| Capture area (hold ⇧ on release to edit) | `⌘⇧2` |
+| Capture screen | `⌘⇧1` |
+| Capture window | `⌘⇧3` |
+
+> Screen recording is planned. macOS only for now.
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/scrme/main/install.sh | bash
+```
+
+Or grab the `.dmg` from [Releases](https://github.com/cubetiqlabs/scrme/releases). On first capture, allow **Screen Recording** in System Settings → Privacy & Security.
+
+## Getting started (from source)
+
+Needs [Rust](https://rustup.rs) and the Tauri CLI.
+
+```sh
+cargo install tauri-cli --version "^2" --locked
+git clone https://github.com/cubetiqlabs/scrme && cd scrme
+cd src-tauri && cargo tauri dev
+```
+
+Run the tests with `cargo test --manifest-path src-tauri/Cargo.toml`.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). AI agents: see [AGENTS.md](AGENTS.md).
+
+## License
+
+[MIT](LICENSE) — free to use, modify and share.
+
+## Author
+
+Made by [Sambo Chea](https://github.com/sombochea).
