@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use image::RgbaImage;
@@ -8,7 +8,10 @@ use tauri::image::Image;
 use tauri::ipc::Response;
 use tauri::menu::{IconMenuItem, Menu, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
+};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -55,7 +58,11 @@ struct Keys {
 impl Keys {
     fn parse(c: &Config) -> Result<Self, String> {
         let p = |name: &str, v: &str| v.parse::<Shortcut>().map_err(|e| format!("{name}: {e}"));
-        let k = Self { area: p("Area", &c.area)?, full: p("Screen", &c.full)?, window: p("Window", &c.window)? };
+        let k = Self {
+            area: p("Area", &c.area)?,
+            full: p("Screen", &c.full)?,
+            window: p("Window", &c.window)?,
+        };
         if k.area == k.full || k.area == k.window || k.full == k.window {
             return Err("Each action needs a different shortcut".into());
         }
@@ -69,7 +76,10 @@ struct Settings {
 }
 
 fn config_path(app: &AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("config.json"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("config.json"))
 }
 
 fn load_config(app: &AppHandle) -> Config {
@@ -98,21 +108,28 @@ fn clamp_rect(x: i64, y: i64, w: i64, h: i64, iw: u32, ih: u32) -> Option<(u32, 
 
 fn copy_image(app: &AppHandle, img: RgbaImage) {
     let (w, h) = img.dimensions();
-    let _ = app.clipboard().write_image(&Image::new_owned(img.into_raw(), w, h));
+    let _ = app
+        .clipboard()
+        .write_image(&Image::new_owned(img.into_raw(), w, h));
 }
 
 fn save_png(img: &RgbaImage) -> Result<String, String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
     let dir = std::path::Path::new(&home).join("Pictures/scrme");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
     let path = dir.join(format!("scrme-{ms}.png"));
     img.save(&path).map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }
 
 fn primary_monitor() -> Option<xcap::Monitor> {
-    xcap::Monitor::all().ok()?.into_iter().find(|m| m.is_primary().unwrap_or(false))
+    xcap::Monitor::all()
+        .ok()?
+        .into_iter()
+        .find(|m| m.is_primary().unwrap_or(false))
 }
 
 /// Quick-capture finish: clipboard first (that's the "instant" part),
@@ -122,12 +139,19 @@ fn finish(app: &AppHandle, img: RgbaImage) {
     let saved = cfg.autosave.then(|| img.clone());
     copy_image(app, img);
     if cfg.animation {
-        show_toast(app, if cfg.autosave { "Copied & saved" } else { "Copied" });
+        show_toast(
+            app,
+            if cfg.autosave {
+                "Copied & saved"
+            } else {
+                "Copied"
+            },
+        );
     }
-    if let Some(img) = saved {
-        if let Err(e) = save_png(&img) {
-            eprintln!("autosave failed: {e}");
-        }
+    if let Some(img) = saved
+        && let Err(e) = save_png(&img)
+    {
+        eprintln!("autosave failed: {e}");
     }
 }
 
@@ -155,7 +179,12 @@ const TOAST_H: f64 = 44.0;
 static TOAST_GEN: AtomicU32 = AtomicU32::new(0);
 
 fn show_toast(app: &AppHandle, text: &str) {
-    let Some(w) = app.get_webview_window("toast").or_else(|| build_toast(app).ok()) else { return };
+    let Some(w) = app
+        .get_webview_window("toast")
+        .or_else(|| build_toast(app).ok())
+    else {
+        return;
+    };
     if let Ok(Some(m)) = w.primary_monitor() {
         let (mp, ms, s) = (m.position(), m.size(), m.scale_factor());
         let x = mp.x as f64 + (ms.width as f64 - TOAST_W * s) / 2.0;
@@ -230,11 +259,19 @@ fn start_area_capture(app: &AppHandle) {
         return;
     };
     let scale = mon.scale_factor().unwrap_or(1.0) as f64;
-    let pos = PhysicalPosition::new(mon.x().unwrap_or(0) as f64 * scale, mon.y().unwrap_or(0) as f64 * scale);
+    let pos = PhysicalPosition::new(
+        mon.x().unwrap_or(0) as f64 * scale,
+        mon.y().unwrap_or(0) as f64 * scale,
+    );
     let size = PhysicalSize::new(img.width(), img.height());
     *app.state::<Frozen>().0.lock().unwrap() = Some(img);
 
-    let Some(win) = app.get_webview_window("overlay").or_else(|| build_overlay(app).ok()) else { return };
+    let Some(win) = app
+        .get_webview_window("overlay")
+        .or_else(|| build_overlay(app).ok())
+    else {
+        return;
+    };
     let _ = win.set_position(pos);
     let _ = win.set_size(size);
     let _ = win.show();
@@ -252,7 +289,8 @@ fn capture_full(app: &AppHandle) {
 /// Focused window of the frontmost app (we are an Accessory app, so never ourselves).
 fn capture_window(app: &AppHandle) {
     let win = xcap::Window::all().ok().and_then(|w| {
-        w.into_iter().find(|w| w.is_focused().unwrap_or(false) && !w.is_minimized().unwrap_or(true))
+        w.into_iter()
+            .find(|w| w.is_focused().unwrap_or(false) && !w.is_minimized().unwrap_or(true))
     });
     if let Some(img) = win.and_then(|w| w.capture_image().ok()) {
         finish(app, img);
@@ -267,8 +305,12 @@ fn commit(app: AppHandle, state: tauri::State<Frozen>, x: i64, y: i64, w: i64, h
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
-    let Some(img) = state.0.lock().unwrap().take() else { return };
-    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, img.width(), img.height()) else { return };
+    let Some(img) = state.0.lock().unwrap().take() else {
+        return;
+    };
+    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, img.width(), img.height()) else {
+        return;
+    };
     let crop = image::imageops::crop_imm(&img, cx, cy, cw, ch).to_image();
     drop(img);
     if edit {
@@ -290,17 +332,32 @@ fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
 
 #[tauri::command]
 fn edit_size(state: tauri::State<Pending>) -> Option<(u32, u32)> {
-    state.0.lock().unwrap().as_ref().map(|i| (i.width(), i.height()))
+    state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|i| (i.width(), i.height()))
 }
 
 #[tauri::command]
 fn edit_bytes(state: tauri::State<Pending>) -> Response {
-    Response::new(state.0.lock().unwrap().as_ref().map(|i| i.as_raw().clone()).unwrap_or_default())
+    Response::new(
+        state
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|i| i.as_raw().clone())
+            .unwrap_or_default(),
+    )
 }
 
 /// Body = raw RGBA, headers `w`/`h` = dimensions.
 fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
-    let tauri::ipc::InvokeBody::Raw(raw) = req.body() else { return None };
+    let tauri::ipc::InvokeBody::Raw(raw) = req.body() else {
+        return None;
+    };
     let num = |k| req.headers().get(k)?.to_str().ok()?.parse::<u32>().ok();
     RgbaImage::from_raw(num("w")?, num("h")?, raw.clone())
 }
@@ -309,7 +366,9 @@ fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
 fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
     let (w, h) = img.dimensions();
-    app.clipboard().write_image(&Image::new_owned(img.into_raw(), w, h)).map_err(|e| e.to_string())
+    app.clipboard()
+        .write_image(&Image::new_owned(img.into_raw(), w, h))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -388,7 +447,16 @@ pub fn run() {
         .manage(Frozen::default())
         .manage(Pending::default())
         .invoke_handler(tauri::generate_handler![
-            commit, cancel, edit_size, edit_bytes, copy_rgba, save_rgba, close_editor, get_config, set_config, default_config
+            commit,
+            cancel,
+            edit_size,
+            edit_bytes,
+            copy_rgba,
+            save_rgba,
+            close_editor,
+            get_config,
+            set_config,
+            default_config
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -396,7 +464,8 @@ pub fn run() {
 
             let handle = app.handle();
             let cfg = load_config(handle);
-            let keys = Keys::parse(&cfg).unwrap_or_else(|_| Keys::parse(&Config::default()).unwrap());
+            let keys =
+                Keys::parse(&cfg).unwrap_or_else(|_| Keys::parse(&Config::default()).unwrap());
             if config_path(handle).is_some_and(|p| !p.exists()) {
                 let _ = write_config(handle, &cfg);
             }
@@ -406,21 +475,51 @@ pub fn run() {
                     eprintln!("cannot register {s}: {e}");
                 }
             }
-            app.manage(Settings { cfg: Mutex::new(cfg), keys: Mutex::new(keys) });
+            app.manage(Settings {
+                cfg: Mutex::new(cfg),
+                keys: Mutex::new(keys),
+            });
 
             let item = |id: &str, label: &str, png: &[u8]| -> tauri::Result<IconMenuItem<_>> {
-                IconMenuItem::with_id(app, id, label, true, Some(Image::from_bytes(png)?), None::<&str>)
+                IconMenuItem::with_id(
+                    app,
+                    id,
+                    label,
+                    true,
+                    Some(Image::from_bytes(png)?),
+                    None::<&str>,
+                )
             };
             let menu = Menu::with_items(
                 app,
                 &[
-                    &item("area", "Capture Area", include_bytes!("../icons/menu/area.png"))?,
-                    &item("full", "Capture Screen", include_bytes!("../icons/menu/screen.png"))?,
-                    &item("window", "Capture Window", include_bytes!("../icons/menu/window.png"))?,
+                    &item(
+                        "area",
+                        "Capture Area",
+                        include_bytes!("../icons/menu/area.png"),
+                    )?,
+                    &item(
+                        "full",
+                        "Capture Screen",
+                        include_bytes!("../icons/menu/screen.png"),
+                    )?,
+                    &item(
+                        "window",
+                        "Capture Window",
+                        include_bytes!("../icons/menu/window.png"),
+                    )?,
                     &PredefinedMenuItem::separator(app)?,
-                    &item("prefs", "Preferences…", include_bytes!("../icons/menu/prefs.png"))?,
+                    &item(
+                        "prefs",
+                        "Preferences…",
+                        include_bytes!("../icons/menu/prefs.png"),
+                    )?,
                     &PredefinedMenuItem::separator(app)?,
-                    &item("quit", "Quit scrme", include_bytes!("../icons/menu/quit.png"))?,
+                    &item(
+                        "quit",
+                        "Quit scrme",
+                        include_bytes!("../icons/menu/quit.png"),
+                    )?,
                 ],
             )?;
             TrayIconBuilder::new()
@@ -461,7 +560,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_rect, Config, Keys};
+    use super::{Config, Keys, clamp_rect};
     #[test]
     fn clamp() {
         assert_eq!(clamp_rect(10, 10, 50, 50, 100, 100), Some((10, 10, 50, 50)));
@@ -472,9 +571,15 @@ mod tests {
     #[test]
     fn keys_parse_and_dupes_rejected() {
         assert!(Keys::parse(&Config::default()).is_ok());
-        let c = Config { full: "Cmd+Shift+2".into(), ..Config::default() };
+        let c = Config {
+            full: "Cmd+Shift+2".into(),
+            ..Config::default()
+        };
         assert!(Keys::parse(&c).is_err());
-        let c = Config { area: "nonsense++".into(), ..Config::default() };
+        let c = Config {
+            area: "nonsense++".into(),
+            ..Config::default()
+        };
         assert!(Keys::parse(&c).is_err());
     }
 }
