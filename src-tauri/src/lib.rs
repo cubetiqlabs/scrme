@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use image::RgbaImage;
@@ -36,6 +36,8 @@ struct Config {
     autosave: bool,
     /// Show the success toast.
     animation: bool,
+    /// Check for updates on launch and every few hours; download in the background.
+    auto_update: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -45,6 +47,7 @@ impl Default for Config {
             window: "Cmd+Shift+3".into(),
             autosave: false,
             animation: true,
+            auto_update: true,
         }
     }
 }
@@ -222,7 +225,7 @@ fn open_settings(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Preferences")
-        .inner_size(420.0, 500.0)
+        .inner_size(420.0, 640.0)
         .resizable(false)
         .center()
         .build();
@@ -417,12 +420,85 @@ fn set_config(app: AppHandle, state: tauri::State<Settings>, cfg: Config) -> Res
     Ok(())
 }
 
+// ───────────────────────── updates ─────────────────────────
+
+/// Signed updates come from the GitHub release `latest.json` (see tauri.conf.json).
+#[derive(Default)]
+struct UpdateState {
+    /// Version already downloaded + installed on disk, waiting for a restart.
+    ready: Mutex<Option<String>>,
+    busy: AtomicBool,
+    item: Mutex<Option<IconMenuItem<tauri::Wry>>>,
+}
+
+async fn do_update(app: &AppHandle, manual: bool) -> Result<Option<String>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        if manual {
+            show_toast(app, "Up to date");
+        }
+        return Ok(None);
+    };
+    let v = update.version.clone();
+    if manual {
+        show_toast(app, "Updating…");
+    }
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    let st = app.state::<UpdateState>();
+    *st.ready.lock().unwrap() = Some(v.clone());
+    if let Some(item) = st.item.lock().unwrap().as_ref() {
+        let _ = item.set_text(format!("Restart to update to v{v}"));
+    }
+    show_toast(app, "Restart to update");
+    Ok(Some(v))
+}
+
+/// Check, download and install an update. `Ok(Some(v))` = v is ready, restart to apply.
+async fn run_update(app: &AppHandle, manual: bool) -> Result<Option<String>, String> {
+    let st = app.state::<UpdateState>();
+    if let Some(v) = st.ready.lock().unwrap().clone() {
+        return Ok(Some(v));
+    }
+    if st.busy.swap(true, Ordering::SeqCst) {
+        return Ok(None);
+    }
+    let res = do_update(app, manual).await;
+    st.busy.store(false, Ordering::SeqCst);
+    if let Err(e) = &res {
+        eprintln!("update check failed: {e}");
+        if manual {
+            show_toast(app, "Update failed");
+        }
+    }
+    res
+}
+
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
+    run_update(&app, true).await
+}
+
+#[tauri::command]
+fn update_ready(state: tauri::State<UpdateState>) -> Option<String> {
+    state.ready.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    app.restart()
+}
+
 // ───────────────────────── app ─────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, sc, ev| {
@@ -446,6 +522,7 @@ pub fn run() {
         )
         .manage(Frozen::default())
         .manage(Pending::default())
+        .manage(UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commit,
             cancel,
@@ -456,7 +533,10 @@ pub fn run() {
             close_editor,
             get_config,
             set_config,
-            default_config
+            default_config,
+            check_update,
+            update_ready,
+            restart_app
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -490,6 +570,12 @@ pub fn run() {
                     None::<&str>,
                 )
             };
+            let upd = item(
+                "update",
+                "Check for Updates…",
+                include_bytes!("../icons/menu/update.png"),
+            )?;
+            *app.state::<UpdateState>().item.lock().unwrap() = Some(upd.clone());
             let menu = Menu::with_items(
                 app,
                 &[
@@ -509,6 +595,7 @@ pub fn run() {
                         include_bytes!("../icons/menu/window.png"),
                     )?,
                     &PredefinedMenuItem::separator(app)?,
+                    &upd,
                     &item(
                         "prefs",
                         "Preferences…",
@@ -531,6 +618,14 @@ pub fn run() {
                     match e.id.as_ref() {
                         "prefs" => open_settings(&app),
                         "quit" => app.exit(0),
+                        "update" => {
+                            if app.state::<UpdateState>().ready.lock().unwrap().is_some() {
+                                app.restart();
+                            }
+                            tauri::async_runtime::spawn(async move {
+                                let _ = run_update(&app, true).await;
+                            });
+                        }
                         id => {
                             let id = id.to_string();
                             std::thread::spawn(move || match id.as_str() {
@@ -551,6 +646,18 @@ pub fn run() {
                 let _ = build_overlay(&h);
                 std::thread::sleep(Duration::from_millis(800));
                 let _ = build_toast(&h);
+            });
+
+            // Auto-update: first check shortly after launch, then every 6 hours.
+            let h = handle.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(8));
+                loop {
+                    if h.state::<Settings>().cfg.lock().unwrap().auto_update {
+                        let _ = tauri::async_runtime::block_on(run_update(&h, false));
+                    }
+                    std::thread::sleep(Duration::from_secs(6 * 3600));
+                }
             });
             Ok(())
         })

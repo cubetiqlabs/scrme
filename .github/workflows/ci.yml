@@ -12,32 +12,44 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  # Smaller, faster dev/test builds: we never use a debugger in CI.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+# Jobs run in parallel; wall time = the slowest one (a release build is not
+# needed here: tests already compile everything, and release.yml builds it).
 jobs:
-  test:
-    name: Test & build
+  lint:
+    name: Format & clippy
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Rust toolchain
-        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Format
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Format
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - name: Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Build (release)
-        run: cargo build --manifest-path src-tauri/Cargo.toml --release
+
+  test:
+    name: Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
   scripts:
-    name: Lint scripts & workflows
+    name: Scripts & workflows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: shellcheck
-        run: shellcheck install.sh scripts/release.sh
-      - name: actionlint
-        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) && ./actionlint
+      - run: shellcheck install.sh scripts/release.sh
+      - run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) && ./actionlint

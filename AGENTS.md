@@ -44,9 +44,17 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 Always use the **latest major version** of every action (e.g. `actions/checkout@v7`). Check with
 `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Dependabot also keeps them current.
 
+## Updates
+
+In-app updates use `tauri-plugin-updater` against the release asset `latest.json`. Update bundles are
+signed: the public key is in `tauri.conf.json`, the private key is the `TAURI_SIGNING_PRIVATE_KEY` repo
+secret (maintainer keeps a backup; never commit it). `createUpdaterArtifacts` is on, so a local
+`cargo tauri build` needs `TAURI_SIGNING_PRIVATE_KEY` set; use `cargo tauri dev` or `cargo build` instead.
+Logic lives in the "updates" section of `lib.rs` (`run_update`).
+
 ## Releasing
 
 `scripts/release.sh [patch|minor|major|X.Y.Z]` bumps the version in `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json`, commits, tags `vX.Y.Z` and pushes. The tag triggers `release.yml`, which
-builds macOS dmgs and publishes a GitHub Release. The same workflow can be run from the Actions tab
+builds macOS dmgs + signed updater bundles and publishes a GitHub Release. The same workflow can be run from the Actions tab
 (`workflow_dispatch`) to bump + tag + build in one go.

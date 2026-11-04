@@ -23,6 +23,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYxMkFDM0NDQTIzMkJGQzUKUldURnZ6S2l6TU1xOGMyeW5ucERkOEt2K09WTG9TSUt3bGs2cTZuM0JpeVh1Z0VnalI1Ti81TTMK",
+      "endpoints": [
+        "https://github.com/cubetiqlabs/scrme/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
