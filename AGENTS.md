@@ -6,7 +6,7 @@ Guide for AI coding agents (and humans) working on **scrme**: a tiny, fast, open
 
 ```
 src-tauri/src/lib.rs   all Rust: state, capture (xcap), clipboard, tray, shortcuts, commands
-src-tauri/icons/       app icons; menu/ = tray menu glyphs; tray.png = menu bar template icon
+src-tauri/icons/       app icons; tray.png = menu bar template icon
 src/                   frontend, no bundler: overlay (area select), editor, settings, toast
 src/theme.css          shared palette + mascot styles (toast + settings)
 design/                icon source SVGs (rendered with ImageMagick)
@@ -43,6 +43,10 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 
 Always use the **latest major version** of every action (e.g. `actions/checkout@v7`). Check with
 `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Dependabot also keeps them current.
+
+## Tray menu
+
+Icons are Unicode glyph prefixes in the item titles (`NSMenuItem` images do not render in status-item menus on macOS 27); shortcuts are native accelerators that `sync_menu_keys` keeps in step with the config.
 
 ## Updates
 
