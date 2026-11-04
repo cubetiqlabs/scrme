@@ -235,7 +235,10 @@ fn open_settings(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Preferences")
-        .inner_size(420.0, 640.0)
+        .inner_size(440.0, 720.0)
+        .decorations(false)
+        .transparent(true)
+        .shadow(true)
         .resizable(false)
         .center()
         .build();
@@ -398,6 +401,55 @@ fn close_editor(app: AppHandle, state: tauri::State<Pending>) {
     if let Some(w) = app.get_webview_window("editor") {
         let _ = w.hide();
     }
+}
+
+#[derive(Serialize)]
+struct About {
+    version: String,
+    commit: &'static str,
+    built: &'static str,
+    license: &'static str,
+    author: &'static str,
+    repo: &'static str,
+}
+
+#[tauri::command]
+fn about_info(app: AppHandle) -> About {
+    About {
+        version: app.package_info().version.to_string(),
+        commit: env!("SCRME_COMMIT"),
+        built: env!("SCRME_BUILT"),
+        license: "MIT",
+        author: "Sambo Chea",
+        repo: REPO_URL,
+    }
+}
+
+const REPO_URL: &str = "https://github.com/cubetiqlabs/scrme";
+
+/// Open a GitHub link in the default browser (allow-listed; the webview is not trusted with arbitrary URLs).
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://github.com/") && url.chars().all(|c| c.is_ascii_graphic())) {
+        return Err("link not allowed".into());
+    }
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn close_window(window: tauri::WebviewWindow) {
+    let _ = window.close();
 }
 
 #[tauri::command]
@@ -570,6 +622,9 @@ pub fn run() {
             get_config,
             set_config,
             default_config,
+            about_info,
+            open_url,
+            close_window,
             check_update,
             update_ready,
             restart_app
@@ -686,6 +741,17 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{Config, Keys, clamp_rect};
+    #[test]
+    fn build_info_is_iso8601_utc() {
+        let b = env!("SCRME_BUILT");
+        let ok = b.len() == 20
+            && b.ends_with('Z')
+            && b.as_bytes()[10] == b'T'
+            && b[..4].parse::<u32>().is_ok_and(|y| y >= 2026);
+        assert!(ok, "bad build time: {b}");
+        println!("built {b} commit {}", env!("SCRME_COMMIT"));
+    }
+
     #[test]
     fn clamp() {
         assert_eq!(clamp_rect(10, 10, 50, 50, 100, 100), Some((10, 10, 50, 50)));

@@ -50,7 +50,7 @@ async function save(next) {
 addEventListener('keydown', e => {
   if (!recording) return;
   e.preventDefault();
-  if (e.key === 'Escape') { recording = null; return render(); }
+  if (e.key === 'Escape') { e.stopImmediatePropagation(); recording = null; return render(); }
   const a = accel(e);
   if (a) { const k = recording; recording = null; save({ ...cfg, [k]: a }); }
 });
@@ -76,5 +76,20 @@ $('check').onclick = async () => {
   b.disabled = false; b.classList.remove('busy');
   if (!readyVer && b.textContent === 'Checking') b.textContent = 'Check now';
 };
-window.__TAURI__.app?.getVersion().then(v => { $('ver').textContent = `Screenshots, instantly · v${v}`; $('upd').textContent = `Version ${v}`; });
+invoke('about_info').then(a => {
+  $('ver').textContent = `Screenshots, instantly · v${a.version}`; $('upd').textContent = `Version ${a.version}`;
+  $('a-ver').textContent = `v${a.version}`;
+  const c = $('a-commit'); c.textContent = a.commit; c.dataset.url = `${a.repo}/commit/${a.commit}`;
+  $('a-built').textContent = a.built; $('a-built').title = new Date(a.built).toLocaleString();
+  $('a-src').dataset.url = a.repo;
+});
 invoke('update_ready').then(v => v && showUpdate(v));
+
+// Frameless window: our own close button + Esc; links open in the browser.
+const closeWin = () => invoke('close_window');
+$('close').onclick = closeWin;
+addEventListener('keydown', e => { if (e.key === 'Escape' && !recording) closeWin(); });
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-url]');
+  if (a && a.dataset.url) { e.preventDefault(); invoke('open_url', { url: a.dataset.url }); }
+});

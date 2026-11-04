@@ -44,6 +44,10 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 Always use the **latest major version** of every action (e.g. `actions/checkout@v7`). Check with
 `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Dependabot also keeps them current.
 
+## Preferences window
+
+Frameless (`decorations(false)` + transparent): `src/settings.html` draws its own rounded frame, a draggable header (`data-tauri-drag-region`, needs the `core:window:allow-start-dragging` permission in `capabilities/settings.json`) and a close button/Esc (`close_window` command). The About card reads `about_info`: commit and ISO-8601 UTC build time are embedded by `src-tauri/build.rs` (`SCRME_COMMIT`, `SCRME_BUILT`); links go through the allow-listed `open_url` command (github.com only).
+
 ## Tray menu
 
 Icons are Unicode glyph prefixes in the item titles (`NSMenuItem` images do not render in status-item menus on macOS 27); shortcuts are native accelerators that `sync_menu_keys` keeps in step with the config.
