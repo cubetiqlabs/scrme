@@ -2,6 +2,7 @@
 <html><head><meta charset="utf-8"><title>Preferences</title>
 <link rel="stylesheet" href="theme.css">
 <style>
+:root{--hi:#ffffff12}@media (prefers-color-scheme:light){:root{--hi:#ffffffd0}}
 html,body{height:100%;background:transparent;overflow:hidden}
 body{color:var(--fg);font-size:13px;user-select:none;-webkit-user-select:none;cursor:default}
 #app{height:100%;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line);border-radius:18px;overflow:hidden}
@@ -9,11 +10,16 @@ main{flex:1;overflow-y:auto;padding:0 20px 20px;scrollbar-width:thin}
 main::-webkit-scrollbar{width:8px}main::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 header{flex:none;position:relative;display:flex;align-items:center;gap:12px;margin-bottom:6px;padding:16px 20px;background:var(--grad);color:#fff}
 header>*{pointer-events:none}header>.x{pointer-events:auto}
-.x{position:absolute;top:12px;right:12px;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:50%;
-  background:#ffffff33;color:#fff;cursor:pointer;transition:background .15s,transform .15s}
-.x svg{width:12px;height:12px;transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
-.x:hover{background:#ff5d7a;transform:scale(1.08)}.x:hover svg{transform:rotate(90deg)}
-.x:active{transform:scale(.92)}.x:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.x{position:absolute;top:14px;right:14px;width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:50%;padding:0;color:#fff;cursor:pointer;
+  background:linear-gradient(160deg,#ffffff6e,#ffffff24 55%,#ffffff38);
+  -webkit-backdrop-filter:blur(14px) saturate(1.7);backdrop-filter:blur(14px) saturate(1.7);
+  box-shadow:inset 0 1px 0 #ffffffb0,inset 0 -1px 0 #3b2a6b22,inset 0 0 0 .5px #ffffff66,0 3px 10px #3b2a6b30;
+  transition:transform .22s cubic-bezier(.2,.9,.3,1.2),background .2s,box-shadow .2s}
+.x svg{width:9px;height:9px;filter:drop-shadow(0 1px 1px #3b2a6b40)}
+.x:hover{background:linear-gradient(160deg,#ffffff93,#ffffff3d 55%,#ffffff55);transform:scale(1.08);
+  box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 #3b2a6b22,inset 0 0 0 .5px #ffffff88,0 5px 14px #3b2a6b3d}
+.x:active{transform:scale(.93);transition-duration:.08s}
+.x:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .about .row{min-height:36px}.about .row>span:first-child{flex:none}
 .about code{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);background:var(--chip);padding:2px 7px;border-radius:6px;user-select:text;-webkit-user-select:text}
 .about a,.credit a{color:var(--ac);text-decoration:none;font-weight:600;cursor:pointer}
@@ -24,7 +30,7 @@ header .mascot{width:44px;height:44px;filter:drop-shadow(0 3px 6px #3b2a6b44)}
 header h1{margin:0;font:800 19px var(--font);letter-spacing:-.2px}
 header p{margin:2px 0 0;opacity:.85;font-size:12px}
 h2{margin:14px 4px 6px;font:700 11px var(--font);letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px;box-shadow:inset 0 1px 0 var(--hi)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px}
 .row+.row{border-top:1px solid var(--line)}
 .row small{display:block;color:var(--mut);font-size:11.5px;margin-top:1px}
@@ -45,19 +51,24 @@ h2{margin:14px 4px 6px;font:700 11px var(--font);letter-spacing:.8px;text-transf
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
 .sw:checked{background:var(--grad)}
 .sw:checked::after{transform:translateX(16px)}
-footer{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:0 4px;color:var(--mut);font-size:12px}
-#msg{transition:opacity .2s;opacity:0}
-#msg.show{opacity:1}#msg.err{color:#e5484d}#msg.ok{color:#2a9d57}
+#msg{position:fixed;left:50%;bottom:14px;transform:translate(-50%,8px);padding:5px 13px;border-radius:999px;font:600 12px var(--font);
+  background:color-mix(in srgb,var(--card) 80%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border:1px solid var(--line);box-shadow:0 4px 14px #0003,inset 0 1px 0 var(--hi);pointer-events:none;opacity:0;transition:opacity .2s,transform .2s}
+h2.split{display:flex;align-items:center;justify-content:space-between}
+h2.split button.link{text-transform:none;letter-spacing:0;font-size:11.5px;padding:2px 6px;margin:-2px 0}
+#msg.show{opacity:1;transform:translate(-50%,0)}#msg.err{color:#e5484d}#msg.ok{color:#2a9d57}
 .row>span:first-child{min-width:0;flex:1}
 .row small{overflow-wrap:anywhere}
-.btn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:104px;height:32px;padding:0 14px;white-space:nowrap;
-  background:var(--grad);color:#fff;border:0;border-radius:10px;font:700 12.5px var(--font);cursor:pointer;
-  box-shadow:0 2px 8px #7c5cff44;transition:transform .12s,box-shadow .12s,filter .12s}
-.btn:hover{filter:brightness(1.06);box-shadow:0 4px 12px #7c5cff55}
-.btn:active{transform:scale(.96)}
+.btn{flex:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;white-space:nowrap;border-radius:999px;
+  background:transparent;color:var(--ac);border:1px solid #7c5cff55;font:600 11.5px var(--font);cursor:pointer;
+  transition:background .15s,border-color .15s,transform .12s}
+.btn:hover{background:#7c5cff1c;border-color:var(--ac)}
+.btn:active{transform:scale(.95)}
 .btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.btn:disabled{cursor:progress;filter:saturate(.75) brightness(.97);transform:none}
-.btn.busy::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid #fff6;border-top-color:#fff;animation:spin .7s linear infinite}
+.btn:disabled{cursor:progress;opacity:.7;transform:none}
+.btn.busy::before{content:"";width:9px;height:9px;border-radius:50%;border:1.5px solid #7c5cff44;border-top-color:var(--ac);animation:spin .7s linear infinite}
+.btn.primary{background:var(--grad);color:#fff;border-color:transparent}
+.btn.primary:hover{filter:brightness(1.07)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .bad{color:#e5484d}.good{color:#2a9d57}
 button.link{background:none;border:0;color:var(--ac);font:600 12px var(--font);cursor:pointer;padding:4px 6px;border-radius:6px}
@@ -73,11 +84,11 @@ button.link:hover{background:var(--chip)}
     <ellipse cx="9.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/><ellipse cx="30.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/>
     <path d="M15.5 24.5q4.5 5 9 0" fill="none" stroke="#3b2a6b" stroke-width="2.4" stroke-linecap="round"/></svg>
   <div><h1>scrme</h1><p id="ver">Preferences</p></div>
-  <button class="x" id="close" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>
+  <button class="x" id="close" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>
 </header>
 <main>
 
-<h2>Shortcuts</h2>
+<h2 class="split">Shortcuts<button class="link" id="reset">Reset</button></h2>
 <div class="card" id="keys"></div>
 
 <h2>After capture</h2>
@@ -89,19 +100,19 @@ button.link:hover{background:var(--chip)}
 <h2>Updates</h2>
 <div class="card">
   <label class="row"><span><b>Check automatically</b><small>On launch and every few hours</small></span><input type="checkbox" class="sw" id="auto_update"></label>
-  <div class="row"><span><b id="upd">scrme</b><small id="updsub">&nbsp;</small></span><button class="btn" id="check">Check now</button></div>
+  <div class="row"><span><b id="upd">scrme</b><small id="updsub">&nbsp;</small></span><button class="btn" id="check">Check</button></div>
 </div>
 
-<p class="tip">Click a shortcut, then press new keys (with ⌘ ⌃ ⌥ or ⇧). Hold ⇧ when releasing an area to open the editor.</p>
+<p class="tip">Click a shortcut, then press new keys. Hold ⇧ when releasing an area to open the editor.</p>
 
 <h2>About</h2>
 <div class="card about">
   <div class="row"><span>Version <code id="a-ver">…</code></span><span>Commit <a id="a-commit" data-url="">…</a></span></div>
   <div class="row"><span>Built</span><code id="a-built" title="">…</code></div>
 </div>
-<p class="credit">MIT · Made with <i>♥</i> by <a id="a-author" data-url="https://github.com/sombochea">Sambo Chea</a> · <a id="a-src" data-url="https://github.com/cubetiqlabs/scrme">Source on GitHub</a></p>
+<p class="credit">MIT · Made with <i>♥</i> by <a id="a-author" data-url="https://github.com/sombochea">Sambo Chea</a></p>
 
-<footer><span id="msg">Saved</span><button class="link" id="reset">Reset to defaults</button></footer>
+<span id="msg">Saved</span>
 </main>
 </div>
 <script src="settings.js"></script>

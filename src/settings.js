@@ -63,7 +63,8 @@ let readyVer = null;
 const sub = (t, cls = '') => { $('updsub').textContent = t; $('updsub').className = cls; };
 function showUpdate(v) {
   readyVer = v;
-  $('check').textContent = v ? 'Restart now' : 'Check now';
+  $('check').textContent = v ? 'Restart' : 'Check';
+  $('check').classList.toggle('primary', !!v);
   v ? sub(`v${v} is installed, restart to finish`, 'good') : sub('You have the latest version', 'good');
 }
 $('check').onclick = async () => {
@@ -72,16 +73,21 @@ $('check').onclick = async () => {
   b.disabled = true; b.classList.add('busy'); b.textContent = 'Checking'; sub('Looking for updates…');
   const min = new Promise(r => setTimeout(r, 700)); // avoid a flicker on instant results
   try { const v = await invoke('check_update'); await min; showUpdate(v); }
-  catch (e) { await min; b.textContent = 'Try again'; sub('Couldn\'t check for updates. Are you online?', 'bad'); $('updsub').title = String(e); }
+  catch (e) { await min; b.textContent = 'Retry'; sub('Couldn\'t check for updates. Are you online?', 'bad'); $('updsub').title = String(e); }
   b.disabled = false; b.classList.remove('busy');
-  if (!readyVer && b.textContent === 'Checking') b.textContent = 'Check now';
+  if (!readyVer && b.textContent === 'Checking') b.textContent = 'Check';
 };
+// "Nov 4, 8:17 PM" (year only when it isn't this year); full ISO stays in the tooltip.
+function shortDate(iso) {
+  const d = new Date(iso), opt = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+  if (d.getFullYear() !== new Date().getFullYear()) opt.year = 'numeric';
+  return d.toLocaleString(undefined, opt);
+}
 invoke('about_info').then(a => {
   $('ver').textContent = `Screenshots, instantly · v${a.version}`; $('upd').textContent = `Version ${a.version}`;
   $('a-ver').textContent = `v${a.version}`;
   const c = $('a-commit'); c.textContent = a.commit; c.dataset.url = `${a.repo}/commit/${a.commit}`;
-  $('a-built').textContent = a.built; $('a-built').title = new Date(a.built).toLocaleString();
-  $('a-src').dataset.url = a.repo;
+  $('a-built').textContent = shortDate(a.built); $('a-built').title = a.built;
 });
 invoke('update_ready').then(v => v && showUpdate(v));
 
