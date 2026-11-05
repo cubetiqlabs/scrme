@@ -15,6 +15,7 @@ Tiny, fast screenshot app for the menu bar. Press a shortcut, drag an area, and 
 | Action | Default shortcut |
 | --- | --- |
 | Capture area (hold ⇧ on release to edit) | `⌘⇧2` |
+| Capture & annotate (opens the editor) | `⌘⇧4` |
 | Capture screen | `⌘⇧1` |
 | Capture window | `⌘⇧3` |
 

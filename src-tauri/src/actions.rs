@@ -14,6 +14,7 @@ use crate::windows::open_settings;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Area,
+    Edit,
     Screen,
     Window,
     Prefs,
@@ -22,8 +23,9 @@ pub(crate) enum Action {
 }
 
 /// One table = tray item id = CLI flag (`--<name>`).
-const NAMES: [(Action, &str); 6] = [
+const NAMES: [(Action, &str); 7] = [
     (Action::Area, "area"),
+    (Action::Edit, "edit"),
     (Action::Screen, "screen"),
     (Action::Window, "window"),
     (Action::Prefs, "prefs"),
@@ -50,6 +52,7 @@ impl Action {
     pub(crate) fn from_shortcut(keys: &Keys, sc: &Shortcut) -> Option<Self> {
         [
             (Action::Area, keys.area),
+            (Action::Edit, keys.edit),
             (Action::Screen, keys.full),
             (Action::Window, keys.window),
         ]
@@ -63,9 +66,10 @@ impl Action {
 pub(crate) fn dispatch(app: &AppHandle, action: Action) {
     let app = app.clone();
     match action {
-        Action::Area | Action::Screen | Action::Window => {
+        Action::Area | Action::Edit | Action::Screen | Action::Window => {
             std::thread::spawn(move || match action {
-                Action::Area => start_area_capture(&app),
+                Action::Area => start_area_capture(&app, false),
+                Action::Edit => start_area_capture(&app, true),
                 Action::Screen => capture_full(&app),
                 _ => capture_window(&app),
             });

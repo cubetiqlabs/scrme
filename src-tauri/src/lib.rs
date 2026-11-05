@@ -50,6 +50,7 @@ pub fn run() {
         )
         .manage(state::Frozen::default())
         .manage(state::Pending::default())
+        .manage(state::EditMode::default())
         .manage(update::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::commit,

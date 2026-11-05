@@ -52,7 +52,7 @@ pub(crate) fn freeze_primary() -> Option<(Frame, PhysicalPosition<f64>)> {
 }
 
 /// Freeze the primary monitor, then show the (pre-built) transparent overlay.
-pub(crate) fn start_area_capture(app: &AppHandle) {
+pub(crate) fn start_area_capture(app: &AppHandle, edit: bool) {
     let t = Instant::now();
     // ponytail: primary monitor only; one overlay per monitor for multi-display.
     let Some((frame, pos)) = freeze_primary() else {
@@ -60,6 +60,9 @@ pub(crate) fn start_area_capture(app: &AppHandle) {
         show_toast_err(app, "Capture failed");
         return;
     };
+    app.state::<EditMode>()
+        .0
+        .store(edit, std::sync::atomic::Ordering::SeqCst);
     let (w, h) = frame.size();
 
     #[cfg(target_os = "macos")]
@@ -118,6 +121,9 @@ fn native_overlay(app: &AppHandle, frame: Frame) -> Result<(), Frame> {
                     commit_selection(&app, &app.state::<Frozen>(), s.x, s.y, s.w, s.h, s.edit)
                 }
                 None => {
+                    app.state::<EditMode>()
+                        .0
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
                     app.state::<Frozen>().0.lock().unwrap().take();
                     trim_memory();
                 }
