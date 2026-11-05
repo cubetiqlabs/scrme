@@ -15,6 +15,7 @@ export function createUI(h) {
     <div class="grp">
       ${button('id="copy" title="Copy (⌘C)"', icon('copy'))}
       ${button('id="save" title="Save to Pictures/scrme (⌘S)"', icon('save'))}
+      ${button('id="pin" title="Pin to screen (⌘P)"', icon('pin'))}
     </div>
     <i class="sep"></i>
     <div class="grp" id="tools">
@@ -57,6 +58,7 @@ export function createUI(h) {
     else if (e.target.closest('#redo')) h.onRedo();
     else if (e.target.closest('#copy')) h.onCopy();
     else if (e.target.closest('#save')) h.onSave();
+    else if (e.target.closest('#pin')) h.onPin();
     else if (e.target.closest('#close')) h.onClose();
   });
   $('custom').addEventListener('input', e => h.onColor(e.target.value));
