@@ -5,12 +5,14 @@ Guide for AI coding agents (and humans) working on **scrme**: a tiny, fast, open
 ## Layout
 
 ```
-src-tauri/src/lib.rs   all Rust: state, capture (xcap), clipboard, tray, shortcuts, commands
+src-tauri/src/        lib.rs (wiring) · actions (hotkey/tray/CLI dispatch) · capture · output (clipboard/save) ·
+                       toast · windows (overlay/settings/editor + raise) · commands (webview IPC) · config · state · tray · update
 src-tauri/icons/       app icons; tray.png = menu bar template icon
 src/                   frontend, no bundler: overlay (area select), editor, settings, toast
 src/theme.css          shared palette + mascot styles (toast + settings)
 design/                icon source SVGs (rendered with ImageMagick)
 scripts/release.sh     version bump + commit + tag + push
+scripts/measure.sh     memory/threads/CPU snapshot of the app + WebKit helpers
 install.sh             one-line macOS installer (downloads latest release .dmg)
 ```
 
@@ -44,9 +46,13 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 Always use the **latest major version** of every action (e.g. `actions/checkout@v7`). Check with
 `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Dependabot also keeps them current.
 
+## CLI / automation
+
+A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
+
 ## Performance budget
 
-Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): app 31 MB + WebKit helpers ~47 MB physical footprint, 0.0% CPU. Keep it there: no polling loops (the only timer is the 6 h update check), animations are CSS transform/opacity only and pause when the window is unfocused/hidden (`body.still`), no animated blur, big buffers (the frozen frame) are `take()`n and dropped on commit/cancel, and the editor webview is destroyed on close. Check with `footprint -p <pid>` and `ps -o pcpu`.
+Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): app 31 MB + WebKit helpers ~47 MB physical footprint, 0.0% CPU. Keep it there: no polling loops (the only timer is the 6 h update check), animations are CSS transform/opacity only and pause when the window is unfocused/hidden (`body.still`), no animated blur, big buffers (the frozen frame) are `take()`n and dropped on commit/cancel, and the editor webview is destroyed on close. Check with `scripts/measure.sh` (or `footprint -p <pid>` and `ps -o pcpu`).
 
 ## Preferences window
 
