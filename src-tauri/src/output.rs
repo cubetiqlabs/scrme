@@ -52,13 +52,14 @@ pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
 /// then the toast, then the optional file write.
 pub(crate) fn finish(app: &AppHandle, img: RgbaImage) {
     let cfg = app.state::<Settings>().cfg.lock().unwrap().clone();
-    let saved = cfg.autosave.then(|| img.clone());
-    copy_image(app, &img);
+    let img = std::sync::Arc::new(img);
     if cfg.animation {
-        // A small floating preview with Edit / Copy / Save as… (replaces the old success toast).
-        crate::preview::show_preview(app, img);
+        // Preview first: it only needs a small thumbnail, so it is on screen within a few ms,
+        // while the (slower) full-size clipboard write follows right after.
+        crate::preview::show_preview(app, img.clone());
     }
-    if let Some(img) = saved
+    copy_image(app, &img);
+    if cfg.autosave
         && let Err(e) = save_png(&img)
     {
         eprintln!("autosave failed: {e}");

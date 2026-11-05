@@ -1,7 +1,7 @@
 // Editor controller: wires the document, tools, view, renderer and toolbar together.
 
 import { clampRect, normRect, toHex } from './geom.js';
-import { createDoc, nextId, addCmd, removeCmd, setCmd, patchCmd, createHistory } from './doc.js';
+import { canvasRect, createDoc, nextId, addCmd, removeCmd, setCmd, patchCmd, createHistory } from './doc.js';
 import { SHAPES, pick } from './shapes.js';
 import { TOOLS, byId, byKey } from './tools.js';
 import { createView } from './view.js';
@@ -27,7 +27,20 @@ const sizeFor = type => (type === 'text' ? TEXT : STROKE)[st.sizeKey] * unit();
 const dpr = () => window.devicePixelRatio || 1;
 const capture = e => { try { vp.setPointerCapture(e.pointerId); } catch { /* synthetic events have no active pointer */ } };
 
-const history = createHistory(() => { ui.setHistory(history.canUndo, history.canRedo); renderer.invalidate(); });
+/** The canvas rect (image + annotations that spill outside it). */
+const canvas = () => canvasRect(st.doc, o => SHAPES[o.type].bounds(o));
+
+let lastRect = '';
+const history = createHistory(() => {
+  ui.setHistory(history.canUndo, history.canRedo);
+  updateInfo();
+  // The canvas grows when annotations leave the image (and shrinks back on undo): keep it in view.
+  if (st.doc) {
+    const r = canvas(), key = `${r.x},${r.y},${r.w},${r.h}`;
+    if (key !== lastRect) { lastRect = key; view.setCanvas(r); }
+  }
+  renderer.invalidate();
+});
 const view = createView($('viewport'), () => { updateInfo(); renderer.invalidate(); });
 const renderer = createRenderer($('view'), () => ({
   doc: st.doc, bitmap: st.bitmap, live: st.live, selected: st.selected, view, unit: unit(),
@@ -46,7 +59,8 @@ const ui = createUI({
 
 function updateInfo() {
   if (!st.doc) return;
-  const w = Math.round(st.doc.w / dpr()), h = Math.round(st.doc.h / dpr());
+  const c = canvas();
+  const w = Math.round(c.w / dpr()), h = Math.round(c.h / dpr());
   ui.setInfo(`${w}×${h}pt · ${Math.round(view.zoom * 100)}%`);
 }
 
@@ -56,8 +70,10 @@ function setTool(id) {
   st.tool = id; ui.setTool(id); ui.closePopover();
   if (id !== 'select') select(null);
   cancelCrop(); hideLoupe();
-  vp.style.cursor = id === 'select' ? 'default' : id === 'text' ? 'text' : id === 'picker' ? 'none' : 'crosshair';
+  vp.style.cursor = cursorFor(id);
 }
+
+const cursorFor = id => (id === 'select' ? 'default' : id === 'text' ? 'text' : id === 'picker' ? 'none' : 'crosshair');
 
 function select(o) { st.selected = o; renderer.invalidate(); }
 
@@ -78,6 +94,7 @@ async function load() {
 
 /** Swap the base image (load, crop, undo of a crop) and resize everything to match. */
 function setImage(bitmap) {
+  lastRect = '';
   st.bitmap = bitmap; st.doc.w = bitmap.width; st.doc.h = bitmap.height;
   renderer.resize();
   view.setImage(bitmap.width, bitmap.height);
@@ -90,8 +107,9 @@ async function send(cmd, done) {
   if (!st.doc) return;
   const wasSelected = st.selected; st.selected = null;
   try {
-    const rgba = flatten(st.doc, st.bitmap, unit());
-    const res = await invoke(cmd, rgba, { headers: { w: String(st.doc.w), h: String(st.doc.h) } });
+    const rect = canvas();
+    const rgba = flatten(st.doc, st.bitmap, unit(), rect);
+    const res = await invoke(cmd, rgba, { headers: { w: String(rect.w), h: String(rect.h) } });
     ui.flash(cmd === 'save_rgba' && typeof res === 'string' ? 'Saved ✓' : `${done} ✓`);
   } catch (e) {
     ui.flash(String(e), true);
@@ -311,7 +329,9 @@ addEventListener('keydown', e => {
   if (byKey[k]) setTool(byKey[k]);
 });
 addEventListener('keyup', e => {
-  if (e.key === ' ') { st.space = false; setTool(st.tool); }
+  // Releasing Space ends panning. Never touch the tool here: setTool() commits the text being
+  // typed, which made every space in a text box finish the text.
+  if (e.key === ' ' && st.space) { st.space = false; vp.style.cursor = cursorFor(st.tool); }
 });
 
 /** Forget the current image (window is hidden but kept warm): frees the bitmap and canvases. */

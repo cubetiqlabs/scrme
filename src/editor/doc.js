@@ -40,6 +40,23 @@ export const setCmd = (obj, before, after) => ({
   undo: () => Object.assign(obj, before),
 });
 
+/**
+ * The drawable canvas: the image plus anything annotated outside it. `boundsFn(obj)` gives an
+ * object's {x,y,w,h}; the result is rounded outwards to whole pixels and may start at a
+ * negative origin. Pure, so it is unit-tested.
+ */
+export function canvasRect(doc, boundsFn) {
+  let x0 = 0, y0 = 0, x1 = doc.w, y1 = doc.h;
+  for (const o of doc.objects) {
+    if (o.hidden) continue;
+    const b = boundsFn(o);
+    x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y);
+    x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
+  }
+  const x = Math.floor(x0), y = Math.floor(y0);
+  return { x, y, w: Math.ceil(x1) - x, h: Math.ceil(y1) - y };
+}
+
 export function createHistory(onChange = () => {}) {
   const undoStack = [], redoStack = [];
   return {
