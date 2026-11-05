@@ -50,7 +50,7 @@ Always use the **latest major version** of every action (e.g. `actions/checkout@
 
 ## CLI / automation
 
-A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
+A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --edit | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
 
 ## Capture + clipboard internals (macOS)
 

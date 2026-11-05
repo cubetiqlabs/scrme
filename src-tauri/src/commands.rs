@@ -19,6 +19,12 @@ pub(crate) fn commit(
     edit: bool,
 ) {
     let t = Instant::now();
+    // "Capture & annotate" opens the editor regardless of ⇧; always clear the flag.
+    let edit = app
+        .state::<EditMode>()
+        .0
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+        || edit;
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
@@ -44,6 +50,9 @@ pub(crate) fn commit(
 
 #[tauri::command]
 pub(crate) fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
+    app.state::<EditMode>()
+        .0
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     state.0.lock().unwrap().take();
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
@@ -184,7 +193,7 @@ pub(crate) fn set_config(
     let gs = app.global_shortcut();
     let register = |k: Keys| -> Result<(), String> {
         gs.unregister_all().map_err(|e| e.to_string())?;
-        for s in [k.area, k.full, k.window] {
+        for s in k.all() {
             gs.register(s).map_err(|e| format!("{s}: {e}"))?;
         }
         Ok(())

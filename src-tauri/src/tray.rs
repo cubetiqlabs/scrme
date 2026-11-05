@@ -12,6 +12,7 @@ pub(crate) struct TrayKeys {
     pub(crate) area: MenuItem<tauri::Wry>,
     pub(crate) full: MenuItem<tauri::Wry>,
     pub(crate) window: MenuItem<tauri::Wry>,
+    pub(crate) edit: MenuItem<tauri::Wry>,
 }
 
 pub(crate) fn sync_menu_keys(app: &AppHandle, cfg: &Config) {
@@ -22,6 +23,7 @@ pub(crate) fn sync_menu_keys(app: &AppHandle, cfg: &Config) {
         (&t.area, &cfg.area),
         (&t.full, &cfg.full),
         (&t.window, &cfg.window),
+        (&t.edit, &cfg.edit),
     ] {
         let _ = item.set_accelerator(Some(key.as_str()));
     }
@@ -36,6 +38,7 @@ pub(crate) fn build(app: &App) -> tauri::Result<()> {
         MenuItem::with_id(app, a.name(), label, true, key)
     };
     let area = item(Action::Area, "⛶  Capture Area", Some(&cfg.area))?;
+    let edit = item(Action::Edit, "✎  Capture & Annotate", Some(&cfg.edit))?;
     let full = item(Action::Screen, "▭  Capture Screen", Some(&cfg.full))?;
     let window = item(Action::Window, "❏  Capture Window", Some(&cfg.window))?;
     let upd = item(Action::Update, "↻  Check for Updates…", None)?;
@@ -46,11 +49,13 @@ pub(crate) fn build(app: &App) -> tauri::Result<()> {
         area: area.clone(),
         full: full.clone(),
         window: window.clone(),
+        edit: edit.clone(),
     });
     let menu = Menu::with_items(
         app,
         &[
             &area,
+            &edit,
             &full,
             &window,
             &PredefinedMenuItem::separator(app)?,
