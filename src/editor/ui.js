@@ -30,6 +30,8 @@ export function createUI(h) {
       ${button('id="redo" title="Redo (⇧⌘Z)"', icon('redo'))}
     </div>
     <span class="grow" data-tauri-drag-region></span>
+    <span class="chip" id="hint" hidden></span>
+    <span class="chip hex" id="hex" hidden><i id="hexDot"></i><b id="hexVal"></b> ⇥ copy</span>
     <span class="chip" id="flash" hidden></span>
     <span class="chip" id="info"></span>
     <div class="pop" id="pop" hidden>
@@ -77,6 +79,11 @@ export function createUI(h) {
       f.textContent = text; f.hidden = false; f.classList.toggle('bad', bad);
       clearTimeout(flashTimer); flashTimer = setTimeout(() => { f.hidden = true; }, 1600);
     },
+    setHex(hex) {
+      const c = $('hex'); c.hidden = !hex;
+      if (hex) { $('hexVal').textContent = hex; $('hexDot').style.background = hex; }
+    },
+    setHint(text) { const c = $('hint'); c.hidden = !text; c.textContent = text ?? ''; },
     closePopover() { pop.hidden = true; },
   };
 }

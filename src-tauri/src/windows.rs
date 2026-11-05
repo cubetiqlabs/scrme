@@ -77,7 +77,7 @@ pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
             .decorations(false)
             .transparent(true)
             .shadow(true)
-            .min_inner_size(760.0, 420.0)
+            .min_inner_size(900.0, 420.0)
             .visible(false)
             .build()
             .ok()
@@ -86,7 +86,7 @@ pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
     };
     // Image in points + toolbar (52) + breathing room, capped to a sensible window.
     let s = win.scale_factor().unwrap_or(1.0);
-    let lw = (w as f64 / s + 120.0).clamp(760.0, 1400.0);
+    let lw = (w as f64 / s + 120.0).clamp(900.0, 1400.0);
     let lh = (h as f64 / s + 52.0 + 120.0).clamp(420.0, 900.0);
     let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     let _ = win.center();

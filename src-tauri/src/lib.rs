@@ -56,6 +56,7 @@ pub fn run() {
             commands::edit_bytes,
             commands::copy_rgba,
             commands::save_rgba,
+            commands::copy_text,
             commands::close_editor,
             commands::get_config,
             commands::set_config,

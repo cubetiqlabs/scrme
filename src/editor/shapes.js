@@ -63,6 +63,29 @@ export const SHAPES = {
     bounds: o => boundsOf(ptsOfLine(o), o.size * 2),
     translate: (o, dx, dy) => ({ x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }),
   },
+  ruler: {
+    // A measured line: end caps plus a pill label with the length in points.
+    draw(ctx, o, env) {
+      stroke(ctx, o);
+      const a = { x: o.x1, y: o.y1 }, b = { x: o.x2, y: o.y2 };
+      const ang = Math.atan2(b.y - a.y, b.x - a.x), cap = o.size * 2.5;
+      const nx = -Math.sin(ang) * cap, ny = Math.cos(ang) * cap;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(a.x + nx, a.y + ny);
+      ctx.moveTo(b.x - nx, b.y - ny); ctx.lineTo(b.x + nx, b.y + ny); ctx.stroke();
+      const label = `${Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (env.dpr || 1))}pt`;
+      const fs = o.size * 4.2;
+      ctx.font = `700 ${fs}px ${FONT}`;
+      const w = ctx.measureText(label).width + fs * 0.9, h = fs * 1.5;
+      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      ctx.fillStyle = o.color; ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx, cy + fs * 0.05); ctx.textAlign = 'left';
+    },
+    hit: (o, p, tol) => distToSegment(p, { x: o.x1, y: o.y1 }, { x: o.x2, y: o.y2 }) <= tol + o.size * 2,
+    bounds: o => boundsOf(ptsOfLine(o), o.size * 3),
+    translate: (o, dx, dy) => ({ x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }),
+  },
   pen: {
     draw(ctx, o) {
       stroke(ctx, o);
