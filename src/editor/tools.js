@@ -40,6 +40,9 @@ export const TOOLS = [
   { id: 'marker', key: 'n', label: 'Numbered marker',
     start: (p, ctx) => base('marker', ctx, { x: p.x, y: p.y, n: nextMarker(ctx.doc) }), drag() {}, done: () => true },
   { id: 'blur', key: 'b', label: 'Blur / pixelate', ...boxTool('blur') },
+  { id: 'ruler', key: 'm', label: 'Ruler (measure)', ...lineTool('ruler') },
+  { id: 'picker', key: 'i', label: 'Color picker', picker: true },
+  { id: 'crop', key: 'c', label: 'Crop (Enter to apply)', crop: true },
 ];
 
 export const byId = Object.fromEntries(TOOLS.map(t => [t.id, t]));
