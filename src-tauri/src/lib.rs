@@ -245,21 +245,59 @@ fn build_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .build()
 }
 
-fn open_settings(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("settings") {
+/// Make this (Accessory-policy) app the active app. Without it macOS ignores
+/// `show()`/`set_focus()` and the window opens behind whatever is frontmost.
+#[cfg(target_os = "macos")]
+fn activate_app() {
+    use objc2::runtime::NSObjectProtocol;
+    use objc2::{MainThreadMarker, msg_send, sel};
+    use objc2_app_kit::NSApplication;
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    // `activate` (macOS 14+) is the cooperative API; older systems need the legacy call.
+    if app.respondsToSelector(sel!(activate)) {
+        // SAFETY: `-[NSApplication activate]` takes no arguments and returns void.
+        unsafe { msg_send![&*app, activate] }
+    } else {
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+    }
+}
+#[cfg(not(target_os = "macos"))]
+fn activate_app() {}
+
+/// Bring a window to the front of everything: activate the app, then show + focus,
+/// all on the main thread (AppKit requirement).
+fn raise(app: &AppHandle, w: &WebviewWindow) {
+    let w = w.clone();
+    let _ = app.run_on_main_thread(move || {
+        activate_app();
+        let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+    });
+}
+
+fn open_settings(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        raise(app, &w);
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+    let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Preferences")
         .inner_size(440.0, 690.0)
         .decorations(false)
         .transparent(true)
         .shadow(true)
         .resizable(false)
+        .focused(true)
         .center()
         .build();
+    if let Ok(w) = built {
+        raise(app, &w);
+    }
 }
 
 fn open_editor(app: &AppHandle, w: u32, h: u32) {
@@ -276,8 +314,7 @@ fn open_editor(app: &AppHandle, w: u32, h: u32) {
     let lh = (h as f64 / s).clamp(300.0, 900.0) + 48.0;
     let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     let _ = win.center();
-    let _ = win.show();
-    let _ = win.set_focus();
+    raise(app, &win);
     let _ = win.eval("window.__load && window.__load()");
 }
 
@@ -708,7 +745,13 @@ pub fn run() {
                 .on_menu_event(|app, e| {
                     let app = app.clone();
                     match e.id.as_ref() {
-                        "prefs" => open_settings(&app),
+                        // Let the tray menu finish closing first; it steals activation on its way out.
+                        "prefs" => {
+                            std::thread::spawn(move || {
+                                std::thread::sleep(Duration::from_millis(60));
+                                open_settings(&app);
+                            });
+                        }
                         "quit" => app.exit(0),
                         "update" => {
                             if app.state::<UpdateState>().ready.lock().unwrap().is_some() {

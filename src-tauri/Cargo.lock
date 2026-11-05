@@ -3823,6 +3823,8 @@ name = "scrme"
 version = "0.1.3"
 dependencies = [
  "image",
+ "objc2",
+ "objc2-app-kit",
  "serde",
  "serde_json",
  "tauri",
