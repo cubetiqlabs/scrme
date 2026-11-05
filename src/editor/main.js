@@ -40,7 +40,7 @@ const ui = createUI({
     st.sizeKey = key; ui.setSize(key);
     if (st.selected && 'size' in st.selected) history.run(patchCmd(st.selected, { size: sizeFor(st.selected.type) }));
   },
-  onUndo: () => undo(), onRedo: () => redo(), onCopy: () => send('copy_rgba', 'Copied'), onSave: () => send('save_rgba', 'Saved'),
+  onUndo: () => undo(), onRedo: () => redo(), onCopy: () => send('copy_rgba', 'Copied'), onSave: () => send('save_rgba', 'Saved'), onPin: () => send('pin_rgba', 'Pinned'),
   onClose: () => invoke('close_editor'),
 });
 
@@ -287,6 +287,7 @@ addEventListener('keydown', e => {
     if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (k === 'c') { e.preventDefault(); send('copy_rgba', 'Copied'); }
     else if (k === 's') { e.preventDefault(); send('save_rgba', 'Saved'); }
+    else if (k === 'p') { e.preventDefault(); send('pin_rgba', 'Pinned'); }
     else if (k === '=' || k === '+') { e.preventDefault(); view.zoomBy(1.25); }
     else if (k === '-') { e.preventDefault(); view.zoomBy(0.8); }
     else if (k === '0') { e.preventDefault(); e.shiftKey ? view.actual() : view.fit(); }
