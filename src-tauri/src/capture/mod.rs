@@ -1,4 +1,5 @@
 mod frame;
+pub(crate) mod geometry;
 #[cfg(target_os = "macos")]
 mod macos;
 
@@ -60,6 +61,16 @@ pub(crate) fn start_area_capture(app: &AppHandle) {
         return;
     };
     let (w, h) = frame.size();
+
+    #[cfg(target_os = "macos")]
+    let frame = match native_overlay(app, frame) {
+        Ok(()) => {
+            eprintln!("hotkey→native overlay {:?}", t.elapsed());
+            return;
+        }
+        Err(frame) => frame,
+    };
+
     *app.state::<Frozen>().0.lock().unwrap() = Some(frame);
 
     let Some(win) = app
@@ -74,6 +85,49 @@ pub(crate) fn start_area_capture(app: &AppHandle) {
     let _ = win.set_focus();
     let _ = win.eval("window.__arm&&window.__arm()");
     eprintln!("hotkey→overlay {:?}", t.elapsed());
+}
+
+/// Show the native overlay for a CGImage frame. Gives the frame back when it can't
+/// (other pixel source, or `SCRME_WEBVIEW_OVERLAY=1`) so the webview overlay takes over.
+#[cfg(target_os = "macos")]
+fn native_overlay(app: &AppHandle, frame: Frame) -> Result<(), Frame> {
+    use crate::commands::commit_selection;
+    use crate::platform::overlay_macos::{self, SendImage};
+
+    let Frame::Cg(cg) = &frame else {
+        return Err(frame);
+    };
+    if std::env::var_os("SCRME_WEBVIEW_OVERLAY").is_some() {
+        return Err(frame);
+    }
+    let image = SendImage(cg.image());
+    *app.state::<Frozen>().0.lock().unwrap() = Some(frame);
+
+    let handle = app.clone();
+    let shown = app.run_on_main_thread(move || {
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            return;
+        };
+        activate_app(); // an Accessory app must be active to receive key events (Esc)
+        let app = handle.clone();
+        overlay_macos::show(mtm, &image.0, move |sel| {
+            // Already on the main thread: hand the heavy work (crop, clipboard) to a worker.
+            let app = app.clone();
+            std::thread::spawn(move || match sel {
+                Some(s) => {
+                    commit_selection(&app, &app.state::<Frozen>(), s.x, s.y, s.w, s.h, s.edit)
+                }
+                None => {
+                    app.state::<Frozen>().0.lock().unwrap().take();
+                    trim_memory();
+                }
+            });
+        });
+    });
+    if shown.is_err() {
+        app.state::<Frozen>().0.lock().unwrap().take();
+    }
+    Ok(())
 }
 
 pub(crate) fn capture_full(app: &AppHandle) {

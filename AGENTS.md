@@ -52,6 +52,10 @@ Always use the **latest major version** of every action (e.g. `actions/checkout@
 
 A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
 
+## Native overlay + toast (macOS)
+
+No webviews are needed at idle on macOS: `platform/overlay_macos.rs` is a borderless `NSWindow` whose layer contents are the frozen `CGImage` (dim cut-out, border and size label are `CAShapeLayer`/`CATextLayer`; Esc cancels, ⇧ on release opens the editor) and `platform/toast_macos.rs` draws the pill and mascot with Core Animation. Pure selection math lives in `capture/geometry.rs` (unit-tested). Fallbacks: the webview overlay/toast (`src/overlay.*`, `src/toast.html`) are used on other OSes or when `SCRME_WEBVIEW_OVERLAY=1` / `SCRME_WEBVIEW_TOAST=1` is set. A dismissed overlay window is parked, not released, because `dismiss` runs inside the view's own event handler.
+
 ## Capture + clipboard internals (macOS)
 
 - `capture/macos.rs` keeps the frozen screenshot as a `CGImage` and reads its BGRA bytes once per crop; only the selected rows are converted to RGBA (xcap copied the whole retina frame 3x). xcap stays as the fallback.

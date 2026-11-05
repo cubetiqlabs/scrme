@@ -54,6 +54,46 @@ pub(crate) fn show_toast_err(app: &AppHandle, text: &str) {
 }
 
 pub(crate) fn show_toast_kind(app: &AppHandle, kind: &str, text: &str) {
+    #[cfg(target_os = "macos")]
+    if native_toast(app, kind, text) {
+        return;
+    }
+    webview_toast(app, kind, text);
+}
+
+/// Native macOS toast (no webview). Returns false when it can't run, so the webview one takes over.
+#[cfg(target_os = "macos")]
+fn native_toast(app: &AppHandle, kind: &str, text: &str) -> bool {
+    use crate::platform::toast_macos::{self, Kind};
+    if std::env::var_os("SCRME_WEBVIEW_TOAST").is_some() {
+        return false;
+    }
+    let (k, ms) = if kind == "err" {
+        (Kind::Err, 2100)
+    } else {
+        (Kind::Ok, 1500)
+    };
+    let id = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let text = text.to_string();
+    let shown = app.run_on_main_thread(move || {
+        if let Some(mtm) = objc2::MainThreadMarker::new() {
+            toast_macos::show(mtm, k, &text);
+        }
+    });
+    if shown.is_err() {
+        return false;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(ms));
+        if TOAST_GEN.load(Ordering::SeqCst) == id {
+            let _ = app.run_on_main_thread(toast_macos::hide);
+        }
+    });
+    true
+}
+
+fn webview_toast(app: &AppHandle, kind: &str, text: &str) {
     // Normally pre-built at startup; if a toast beats the warm-up, build it with the message in the URL.
     let existing = app.get_webview_window("toast");
     let fresh = existing.is_none();
