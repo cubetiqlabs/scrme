@@ -76,13 +76,14 @@ pub(crate) fn edit_size(state: tauri::State<Pending>) -> Option<(u32, u32)> {
 
 #[tauri::command]
 pub(crate) fn edit_bytes(state: tauri::State<Pending>) -> Response {
+    // The editor loads once: hand the buffer over instead of cloning it (halves peak memory).
     Response::new(
         state
             .0
             .lock()
             .unwrap()
-            .as_ref()
-            .map(|i| i.as_raw().clone())
+            .take()
+            .map(|i| i.into_raw())
             .unwrap_or_default(),
     )
 }

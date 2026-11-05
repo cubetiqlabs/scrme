@@ -68,19 +68,31 @@ pub(crate) fn open_settings(app: &AppHandle) {
 }
 
 pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
-    let win = app.get_webview_window("editor").unwrap_or_else(|| {
+    // Frameless like Preferences: the editor draws its own glass toolbar (drag region + close).
+    let existing = app.get_webview_window("editor");
+    let reuse = existing.is_some();
+    let Some(win) = existing.or_else(|| {
         WebviewWindowBuilder::new(app, "editor", WebviewUrl::App("editor.html".into()))
             .title("scrme")
+            .decorations(false)
+            .transparent(true)
+            .shadow(true)
+            .min_inner_size(760.0, 420.0)
             .visible(false)
             .build()
-            .expect("editor window")
-    });
-    // Fit to image (physical px ≈ 2x logical on retina), capped; toolbar adds ~48px.
+            .ok()
+    }) else {
+        return;
+    };
+    // Image in points + toolbar (52) + breathing room, capped to a sensible window.
     let s = win.scale_factor().unwrap_or(1.0);
-    let lw = (w as f64 / s).clamp(480.0, 1400.0);
-    let lh = (h as f64 / s).clamp(300.0, 900.0) + 48.0;
+    let lw = (w as f64 / s + 120.0).clamp(760.0, 1400.0);
+    let lh = (h as f64 / s + 52.0 + 120.0).clamp(420.0, 900.0);
     let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     let _ = win.center();
     raise(app, &win);
-    let _ = win.eval("window.__load && window.__load()");
+    // A page that is already open must pick up the new image; a new one loads it itself.
+    if reuse {
+        let _ = win.eval("location.reload()");
+    }
 }
