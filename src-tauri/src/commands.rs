@@ -5,6 +5,7 @@ use image::RgbaImage;
 use serde::Serialize;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[tauri::command]
@@ -103,6 +104,12 @@ pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), 
     copy_image(&app, img);
     trim_memory();
     Ok(())
+}
+
+/// Plain text to the clipboard (e.g. the eyedropper's hex).
+#[tauri::command]
+pub(crate) fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+    app.clipboard().write_text(text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

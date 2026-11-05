@@ -6,7 +6,7 @@ export function flatten(doc, bitmap, unit) {
   const c = new OffscreenCanvas(doc.w, doc.h);
   const ctx = c.getContext('2d');
   ctx.drawImage(bitmap, 0, 0);
-  const env = { base: bitmap, unit };
+  const env = { base: bitmap, unit, dpr: window.devicePixelRatio || 1 };
   for (const o of doc.objects) SHAPES[o.type].draw(ctx, o, env);
   return ctx.getImageData(0, 0, doc.w, doc.h).data.buffer;
 }

@@ -60,6 +60,15 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:13px 
 #flash{background:var(--grad);color:#fff}
 #flash.bad{background:#e5484d;color:#fff}
 
+.chip.hex{display:flex;align-items:center;gap:6px}
+.chip.hex[hidden]{display:none}
+.chip.hex i{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px #0004}
+.chip.hex b{color:var(--fg);font-variant-numeric:tabular-nums}
+#hint{background:var(--grad);color:#fff}
+.loupe{position:absolute;z-index:6;width:99px;height:99px;border-radius:50%;pointer-events:none;
+  box-shadow:0 0 0 3px #fff,0 0 0 4px #0003,0 8px 24px #0006;image-rendering:pixelated;display:none}
+.loupe::after{content:"";position:absolute;left:44px;top:44px;width:11px;height:11px;box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px #0008;border-radius:2px}
+
 /* canvas */
 #viewport{position:relative;flex:1;overflow:hidden;
   background-color:var(--check-b);

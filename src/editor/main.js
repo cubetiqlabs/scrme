@@ -1,5 +1,6 @@
 // Editor controller: wires the document, tools, view, renderer and toolbar together.
 
+import { clampRect, normRect, toHex } from './geom.js';
 import { createDoc, nextId, addCmd, removeCmd, setCmd, patchCmd, createHistory } from './doc.js';
 import { SHAPES, pick } from './shapes.js';
 import { TOOLS, byId, byKey } from './tools.js';
@@ -17,6 +18,7 @@ const TEXT = { S: 14, M: 20, L: 32 };    // font px × unit
 const st = {
   tool: 'arrow', color: '#ff3b30', sizeKey: 'M',
   doc: null, bitmap: null, selected: null, live: null, shift: false, space: false, pointer: null,
+  crop: null, hex: null, prevTool: 'arrow',
 };
 
 const vp = $('viewport');
@@ -29,6 +31,7 @@ const history = createHistory(() => { ui.setHistory(history.canUndo, history.can
 const view = createView($('viewport'), $('stage'), () => { updateInfo(); renderer.invalidate(); });
 const renderer = createRenderer($('base'), $('scene'), () => ({
   doc: st.doc, bitmap: st.bitmap, live: st.live, selected: st.selected, screenScale: view.scale, unit: unit(),
+  crop: st.crop, dpr: dpr(),
 }));
 const ui = createUI({
   onTool: setTool,
@@ -49,9 +52,11 @@ function updateInfo() {
 
 function setTool(id) {
   endText(true);
+  if (id !== st.tool && st.tool !== 'picker') st.prevTool = st.tool;
   st.tool = id; ui.setTool(id); ui.closePopover();
   if (id !== 'select') select(null);
-  $('viewport').style.cursor = id === 'select' ? 'default' : id === 'text' ? 'text' : 'crosshair';
+  cancelCrop(); hideLoupe();
+  vp.style.cursor = id === 'select' ? 'default' : id === 'text' ? 'text' : id === 'picker' ? 'none' : 'crosshair';
 }
 
 function select(o) { st.selected = o; renderer.invalidate(); }
@@ -65,13 +70,19 @@ async function load() {
   if (!size) return;
   const [w, h] = size;
   const buf = await invoke('edit_bytes'); // Rust releases its copy once we have it
-  st.bitmap = await createImageBitmap(new ImageData(new Uint8ClampedArray(buf), w, h));
   st.doc = createDoc(w, h);
-  renderer.setImage(st.bitmap);
-  const stage = $('stage');
-  stage.style.width = `${w}px`; stage.style.height = `${h}px`;
-  view.setImage(w, h);
+  setImage(await createImageBitmap(new ImageData(new Uint8ClampedArray(buf), w, h)));
   setTool('arrow'); ui.setColor(st.color); ui.setSize(st.sizeKey); ui.setHistory(false, false);
+  updateInfo();
+}
+
+/** Swap the base image (load, crop, undo of a crop) and resize everything to match. */
+function setImage(bitmap) {
+  st.bitmap = bitmap; st.doc.w = bitmap.width; st.doc.h = bitmap.height;
+  renderer.setImage(bitmap);
+  const stage = $('stage');
+  stage.style.width = `${bitmap.width}px`; stage.style.height = `${bitmap.height}px`;
+  view.setImage(bitmap.width, bitmap.height);
   updateInfo();
 }
 
@@ -113,6 +124,8 @@ vp.addEventListener('pointerdown', e => {
     return;
   }
   if (tool.text) { openText(p); e.preventDefault(); return; }
+  if (tool.picker) { pickColor(p); return; }
+  if (tool.crop) { st.crop = { ...p, w: 0, h: 0, _a: p }; st.pointer = { kind: 'crop' }; ui.setHint(null); capture(e); renderer.invalidate(); return; }
   const o = tool.start(p, { ...toolCtx(), size: sizeFor(tool.id) });
   if (!o) return;
   st.live = o; st.pointer = { kind: 'draw', tool };
@@ -123,10 +136,14 @@ vp.addEventListener('pointerdown', e => {
 vp.addEventListener('pointermove', e => {
   const ptr = st.pointer;
   st.shift = e.shiftKey;
+  if (st.tool === 'picker') hover(e);
   if (!ptr) return;
   if (ptr.kind === 'pan') { view.panBy(e.clientX - ptr.x, e.clientY - ptr.y); ptr.x = e.clientX; ptr.y = e.clientY; return; }
   const p = view.toImage(e.clientX, e.clientY);
-  if (ptr.kind === 'draw') ptr.tool.drag(st.live, p, toolCtx());
+  if (ptr.kind === 'crop') {
+    const r = normRect(st.crop._a, p), c = clampRect(r, st.doc.w, st.doc.h);
+    st.crop = c ? { ...c, _a: st.crop._a } : { x: 0, y: 0, w: 0, h: 0, _a: st.crop._a };
+  } else if (ptr.kind === 'draw') ptr.tool.drag(st.live, p, toolCtx());
   else if (ptr.kind === 'move') Object.assign(ptr.o, SHAPES[ptr.o.type].translate(ptr.orig, p.x - ptr.from.x, p.y - ptr.from.y));
   renderer.invalidate();
 });
@@ -134,7 +151,11 @@ vp.addEventListener('pointermove', e => {
 vp.addEventListener('pointerup', e => {
   const ptr = st.pointer; st.pointer = null;
   if (!ptr) return;
-  if (ptr.kind === 'draw') {
+  if (ptr.kind === 'crop') {
+    if (st.crop.w > 4 && st.crop.h > 4) ui.setHint('↵ Enter to crop · Esc to cancel');
+    else cancelCrop();
+    renderer.invalidate();
+  } else if (ptr.kind === 'draw') {
     const o = st.live; st.live = null;
     if (o && ptr.tool.done(o)) { delete o._a; history.run(addCmd(st.doc, o)); }
     renderer.invalidate();
@@ -146,6 +167,7 @@ vp.addEventListener('pointerup', e => {
 });
 
 vp.addEventListener('dblclick', e => {
+  if (st.tool === 'crop' && st.crop) { applyCrop(); return; }
   if (st.tool !== 'select') return;
   const hit = pick(st.doc, view.toImage(e.clientX, e.clientY), 8 / view.scale);
   if (hit?.type === 'text') openText(null, hit);
@@ -153,6 +175,68 @@ vp.addEventListener('dblclick', e => {
 
 /** Object data without render caches (safe for structuredClone). */
 const clean = o => Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('_')));
+
+vp.addEventListener('pointerleave', () => { if (st.tool === 'picker') hideLoupe(); });
+
+// ── color picker ────────────────────────────────────────────────────────
+const baseCtx = () => $('base').getContext('2d', { willReadFrequently: true });
+const loupe = Object.assign(document.createElement('canvas'), { className: 'loupe', width: 99, height: 99 });
+const probe = new OffscreenCanvas(9, 9);
+vp.append(loupe);
+
+function hexAt(p) {
+  const x = Math.floor(p.x), y = Math.floor(p.y);
+  if (x < 0 || y < 0 || x >= st.doc.w || y >= st.doc.h) return null;
+  const d = baseCtx().getImageData(x, y, 1, 1).data;
+  return toHex(d[0], d[1], d[2]);
+}
+
+function hover(e) {
+  const p = view.toImage(e.clientX, e.clientY);
+  st.hex = hexAt(p); ui.setHex(st.hex);
+  if (!st.hex) return hideLoupe();
+  // 9×9 neighbourhood, magnified without smoothing
+  const x = Math.floor(p.x) - 4, y = Math.floor(p.y) - 4;
+  const pctx = probe.getContext('2d'); pctx.clearRect(0, 0, 9, 9);
+  pctx.drawImage($('base'), x, y, 9, 9, 0, 0, 9, 9);
+  const lctx = loupe.getContext('2d'); lctx.imageSmoothingEnabled = false;
+  lctx.clearRect(0, 0, 99, 99); lctx.drawImage(probe, 0, 0, 9, 9, 0, 0, 99, 99);
+  const r = vp.getBoundingClientRect();
+  loupe.style.left = `${e.clientX - r.left + 18}px`; loupe.style.top = `${e.clientY - r.top + 18}px`;
+  loupe.style.display = 'block';
+}
+
+function hideLoupe() { loupe.style.display = 'none'; st.hex = null; ui.setHex(null); }
+
+function pickColor(p) {
+  const hex = hexAt(p);
+  if (!hex) return;
+  st.color = hex; ui.setColor(hex);
+  if (st.selected) history.run(patchCmd(st.selected, { color: hex }));
+  ui.flash(`Picked ${hex}`);
+  setTool(st.prevTool || 'arrow');
+}
+
+async function copyHex() {
+  if (!st.hex) return;
+  try { await invoke('copy_text', { text: st.hex }); ui.flash(`Copied ${st.hex} ✓`); }
+  catch (e) { ui.flash(String(e), true); }
+}
+
+// ── crop ────────────────────────────────────────────────────────────────
+function cancelCrop() { if (!st.crop) return; st.crop = null; ui.setHint(null); renderer.invalidate(); }
+
+async function applyCrop() {
+  const r = st.crop && clampRect(st.crop, st.doc.w, st.doc.h);
+  if (!r) return cancelCrop();
+  const old = st.bitmap, next = await createImageBitmap(old, r.x, r.y, r.w, r.h);
+  const shift = (dx, dy) => { for (const o of st.doc.objects) Object.assign(o, SHAPES[o.type].translate(o, dx, dy)); };
+  st.crop = null; ui.setHint(null); select(null);
+  history.run({
+    do: () => { shift(-r.x, -r.y); setImage(next); },
+    undo: () => { shift(r.x, r.y); setImage(old); },
+  });
+}
 
 // ── inline text editing ─────────────────────────────────────────────────
 let editor = null; // { ta, at, obj }
@@ -208,8 +292,10 @@ addEventListener('keydown', e => {
     else if (k === '0') { e.preventDefault(); e.shiftKey ? view.actual() : view.fit(); }
     return;
   }
+  if (e.key === 'Tab' && st.tool === 'picker') { e.preventDefault(); copyHex(); return; }
+  if (e.key === 'Enter' && st.crop) { e.preventDefault(); applyCrop(); return; }
   if (e.key === ' ') { st.space = true; vp.style.cursor = 'grab'; e.preventDefault(); return; }
-  if (e.key === 'Escape') { st.selected ? select(null) : invoke('close_editor'); return; }
+  if (e.key === 'Escape') { if (st.crop) cancelCrop(); else if (st.selected) select(null); else invoke('close_editor'); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && st.selected) {
     e.preventDefault(); history.run(removeCmd(st.doc, st.selected)); select(null); return;
   }

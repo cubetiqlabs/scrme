@@ -44,4 +44,14 @@ export function addStrokePoint(pts, p, minDist) {
   return pts;
 }
 
+/** Segment length. */
+export const segLen = o => Math.hypot(o.x2 - o.x1, o.y2 - o.y1);
+
+/** Clamp a rect to 0..w × 0..h; null when nothing is left. Coordinates are rounded to whole pixels. */
+export function clampRect(r, w, h) {
+  const x0 = clamp(Math.round(r.x), 0, w), y0 = clamp(Math.round(r.y), 0, h);
+  const x1 = clamp(Math.round(r.x + r.w), 0, w), y1 = clamp(Math.round(r.y + r.h), 0, h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
 export const toHex = (r, g, b) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
