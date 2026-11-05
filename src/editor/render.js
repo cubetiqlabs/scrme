@@ -1,56 +1,76 @@
-// Two-canvas pipeline: the base image is painted once; the scene canvas (objects, live
-// shape, selection box) is redrawn at most once per animation frame.
+// One viewport-sized canvas. Every frame (at most one per rAF) draws the image and the
+// annotations through a zoom/pan transform, so memory and cost follow the *window*, not the
+// image: a retina full-screen capture no longer needs two 30 MB canvases plus a scaled
+// compositor layer. The image itself is a GPU ImageBitmap drawn with drawImage.
 
 import { SHAPES } from './shapes.js';
 
-export function createRenderer(baseCanvas, sceneCanvas, getState) {
-  const sctx = sceneCanvas.getContext('2d');
+export function createRenderer(canvas, getState) {
+  const ctx = canvas.getContext('2d');
   let raf = 0;
 
   function draw() {
     raf = 0;
-    const { doc, bitmap, live, selected, screenScale, unit, crop, dpr } = getState();
-    if (!bitmap) return;
-    sctx.clearRect(0, 0, doc.w, doc.h);
+    const { doc, bitmap, live, selected, view, unit, crop, dpr } = getState();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!bitmap || !doc) return;
+    const z = view.zoom, s = view.scale;
+    ctx.setTransform(z, 0, 0, z, view.x * dpr, view.y * dpr); // image px → device px
+
+    // image (pixelated when zoomed in far enough to see pixels)
+    ctx.imageSmoothingEnabled = z < 3;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.lineWidth = 1 / z; ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.strokeRect(-0.5 / z, -0.5 / z, doc.w + 1 / z, doc.h + 1 / z);
+
+    // annotations are clipped to the image
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, doc.w, doc.h); ctx.clip();
     const env = { base: bitmap, unit, dpr };
-    for (const o of doc.objects) if (!o.hidden) SHAPES[o.type].draw(sctx, o, env);
-    if (live) SHAPES[live.type].draw(sctx, live, env);
-    if (selected) outline(SHAPES[selected.type].bounds(selected), screenScale);
-    if (crop) cropOverlay(doc, crop, screenScale);
+    for (const o of doc.objects) if (!o.hidden) SHAPES[o.type].draw(ctx, o, env);
+    if (live) SHAPES[live.type].draw(ctx, live, env);
+    ctx.restore();
+
+    if (selected) outline(SHAPES[selected.type].bounds(selected), s);
+    if (crop) cropOverlay(doc, crop, s);
   }
 
   // Dim everything outside the crop box; the box itself keeps a crisp outline and thirds.
   function cropOverlay(doc, r, s) {
-    sctx.save();
-    sctx.fillStyle = 'rgba(8, 6, 16, 0.55)';
-    sctx.beginPath(); sctx.rect(0, 0, doc.w, doc.h); sctx.rect(r.x, r.y, r.w, r.h); sctx.fill('evenodd');
-    sctx.lineWidth = 1.5 / s; sctx.strokeStyle = '#ffffff'; sctx.strokeRect(r.x, r.y, r.w, r.h);
-    sctx.lineWidth = 1 / s; sctx.strokeStyle = '#ffffff66';
-    sctx.beginPath();
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 6, 16, 0.55)';
+    ctx.beginPath(); ctx.rect(0, 0, doc.w, doc.h); ctx.rect(r.x, r.y, r.w, r.h); ctx.fill('evenodd');
+    ctx.lineWidth = 1.5 / s; ctx.strokeStyle = '#ffffff'; ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.lineWidth = 1 / s; ctx.strokeStyle = '#ffffff66';
+    ctx.beginPath();
     for (const f of [1 / 3, 2 / 3]) {
-      sctx.moveTo(r.x + r.w * f, r.y); sctx.lineTo(r.x + r.w * f, r.y + r.h);
-      sctx.moveTo(r.x, r.y + r.h * f); sctx.lineTo(r.x + r.w, r.y + r.h * f);
+      ctx.moveTo(r.x + r.w * f, r.y); ctx.lineTo(r.x + r.w * f, r.y + r.h);
+      ctx.moveTo(r.x, r.y + r.h * f); ctx.lineTo(r.x + r.w, r.y + r.h * f);
     }
-    sctx.stroke(); sctx.restore();
+    ctx.stroke(); ctx.restore();
   }
 
   // Selection box with constant on-screen thickness, whatever the zoom.
   function outline(b, s) {
     const pad = 4 / s;
-    sctx.save();
-    sctx.lineWidth = 1.5 / s;
-    sctx.setLineDash([5 / s, 4 / s]);
-    sctx.strokeStyle = '#ffffff'; sctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
-    sctx.lineDashOffset = 4.5 / s;
-    sctx.strokeStyle = '#7c5cff'; sctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
-    sctx.restore();
+    ctx.save();
+    ctx.lineWidth = 1.5 / s;
+    ctx.setLineDash([5 / s, 4 / s]);
+    ctx.strokeStyle = '#ffffff'; ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+    ctx.lineDashOffset = 4.5 / s;
+    ctx.strokeStyle = '#7c5cff'; ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+    ctx.restore();
   }
 
   return {
-    setImage(bitmap) {
-      baseCanvas.width = sceneCanvas.width = bitmap.width;
-      baseCanvas.height = sceneCanvas.height = bitmap.height;
-      baseCanvas.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0);
+    /** Match the backing store to the viewport (device pixels). */
+    resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      this.invalidate();
     },
     invalidate() { if (!raf) raf = requestAnimationFrame(draw); },
   };

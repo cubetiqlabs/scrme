@@ -28,9 +28,9 @@ const dpr = () => window.devicePixelRatio || 1;
 const capture = e => { try { vp.setPointerCapture(e.pointerId); } catch { /* synthetic events have no active pointer */ } };
 
 const history = createHistory(() => { ui.setHistory(history.canUndo, history.canRedo); renderer.invalidate(); });
-const view = createView($('viewport'), $('stage'), () => { updateInfo(); renderer.invalidate(); });
-const renderer = createRenderer($('base'), $('scene'), () => ({
-  doc: st.doc, bitmap: st.bitmap, live: st.live, selected: st.selected, screenScale: view.scale, unit: unit(),
+const view = createView($('viewport'), () => { updateInfo(); renderer.invalidate(); });
+const renderer = createRenderer($('view'), () => ({
+  doc: st.doc, bitmap: st.bitmap, live: st.live, selected: st.selected, view, unit: unit(),
   crop: st.crop, dpr: dpr(),
 }));
 const ui = createUI({
@@ -79,9 +79,7 @@ async function load() {
 /** Swap the base image (load, crop, undo of a crop) and resize everything to match. */
 function setImage(bitmap) {
   st.bitmap = bitmap; st.doc.w = bitmap.width; st.doc.h = bitmap.height;
-  renderer.setImage(bitmap);
-  const stage = $('stage');
-  stage.style.width = `${bitmap.width}px`; stage.style.height = `${bitmap.height}px`;
+  renderer.resize();
   view.setImage(bitmap.width, bitmap.height);
   updateInfo();
 }
@@ -179,7 +177,8 @@ const clean = o => Object.fromEntries(Object.entries(o).filter(([k]) => !k.start
 vp.addEventListener('pointerleave', () => { if (st.tool === 'picker') hideLoupe(); });
 
 // ── color picker ────────────────────────────────────────────────────────
-const baseCtx = () => $('base').getContext('2d', { willReadFrequently: true });
+// Sampling goes through tiny probe canvases: no full-size 2D canvas is kept just to read pixels.
+const probe1 = new OffscreenCanvas(1, 1).getContext('2d', { willReadFrequently: true });
 const loupe = Object.assign(document.createElement('canvas'), { className: 'loupe', width: 99, height: 99 });
 const probe = new OffscreenCanvas(9, 9);
 vp.append(loupe);
@@ -187,7 +186,9 @@ vp.append(loupe);
 function hexAt(p) {
   const x = Math.floor(p.x), y = Math.floor(p.y);
   if (x < 0 || y < 0 || x >= st.doc.w || y >= st.doc.h) return null;
-  const d = baseCtx().getImageData(x, y, 1, 1).data;
+  probe1.clearRect(0, 0, 1, 1);
+  probe1.drawImage(st.bitmap, x, y, 1, 1, 0, 0, 1, 1);
+  const d = probe1.getImageData(0, 0, 1, 1).data;
   return toHex(d[0], d[1], d[2]);
 }
 
@@ -198,7 +199,7 @@ function hover(e) {
   // 9×9 neighbourhood, magnified without smoothing
   const x = Math.floor(p.x) - 4, y = Math.floor(p.y) - 4;
   const pctx = probe.getContext('2d'); pctx.clearRect(0, 0, 9, 9);
-  pctx.drawImage($('base'), x, y, 9, 9, 0, 0, 9, 9);
+  pctx.drawImage(st.bitmap, x, y, 9, 9, 0, 0, 9, 9);
   const lctx = loupe.getContext('2d'); lctx.imageSmoothingEnabled = false;
   lctx.clearRect(0, 0, 99, 99); lctx.drawImage(probe, 0, 0, 9, 9, 0, 0, 99, 99);
   const r = vp.getBoundingClientRect();
@@ -319,13 +320,15 @@ function reset() {
   st.selected = null; st.live = null; st.pointer = null;
   history.reset();
   st.bitmap?.close?.(); st.bitmap = null;
-  for (const c of [$('base'), $('scene')]) { c.width = 1; c.height = 1; }
+  renderer.invalidate();
   st.doc = null; ui.setInfo('');
 }
 
 // Rust calls these on a warm (hidden) window: __open loads the new image, __reset releases it.
 window.__open = () => { reset(); return load().catch(err => ui.flash(String(err), true)); };
 window.__reset = reset;
+
+new ResizeObserver(() => renderer.resize()).observe($('viewport'));
 
 // Frameless window: the toolbar is the drag handle; the page loads its own image.
 load().catch(err => ui.flash(String(err), true));
