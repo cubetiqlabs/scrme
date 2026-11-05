@@ -9,7 +9,7 @@ src-tauri/src/        lib.rs (wiring) · actions (hotkey/tray/CLI dispatch) · c
                        toast · windows (overlay/settings/editor + raise) · commands (webview IPC) · config · state · tray · update
 src-tauri/icons/       app icons; tray.png = menu bar template icon
 src/                   frontend, no bundler: overlay (area select), editor, settings, toast
-src/theme.css          shared palette + mascot styles (toast + settings)
+src/shared/           theme.css (palette), mascot.js/css (+ combo.js), reused by Preferences and the toast
 design/                icon source SVGs (rendered with ImageMagick)
 scripts/release.sh     version bump + commit + tag + push
 scripts/measure.sh     memory/threads/CPU snapshot of the app + WebKit helpers
@@ -61,6 +61,10 @@ A second launch is forwarded to the running instance (`tauri-plugin-single-insta
 ## Performance budget
 
 Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): app 31 MB + WebKit helpers ~47 MB physical footprint, 0.0% CPU. Keep it there: no polling loops (the only timer is the 6 h update check), animations are CSS transform/opacity only and pause when the window is unfocused/hidden (`body.still`), no animated blur, big buffers (the frozen frame) are `take()`n and dropped on commit/cancel, and the editor webview is destroyed on close. Check with `scripts/measure.sh` (or `footprint -p <pid>` and `ps -o pcpu`).
+
+## Mascot
+
+`src/shared/mascot.js` builds the logo (idle loop in `mascot.css`) and a click easter egg: `shared/combo.js` (pure, unit-tested with `node --test src/shared/combo.test.js`) turns rapid clicks into `poke` / `boop` (3) / `dizzy` (6) / `surprise` (10, with a cooldown). Reaction DOM is built once; animations are transform/opacity only, `will-change` only while reacting, and nothing runs under `prefers-reduced-motion`. Reuse with `mountMascot(el)`.
 
 ## Preferences window
 

@@ -1,0 +1,60 @@
+/* scrme mascot: idle loop + click reactions. transform/opacity only; will-change only while reacting. */
+.mascot{display:block;width:42px;height:42px;overflow:visible}
+.spin,.bob,.hop{display:grid}
+.hop{transform-origin:50% 100%}
+.bob{animation:bob 3.2s ease-in-out infinite}
+.hop{animation:hop 7s cubic-bezier(.3,.7,.4,1) infinite}
+.eyes,.cheek,.mouth,.o-eyes,.o-mouth{transform-box:fill-box;transform-origin:center}
+.eyes{animation:blink 4.6s infinite}
+.cheek{animation:blush 3.2s ease-in-out infinite}
+.mouth{transform-origin:50% 0;animation:smile 7s infinite}
+.o-eyes,.o-mouth{opacity:0}
+.sp{position:absolute;color:#fff;line-height:1;opacity:0;text-shadow:0 0 6px #fff9;pointer-events:none}
+.sp.s1{font-size:9px;right:-4px;top:-3px;animation:twinkle 3.6s 0s infinite}
+.sp.s2{font-size:7px;left:-5px;bottom:6px;animation:twinkle 3.6s 1.8s infinite}
+
+/* reaction layer (pre-built once, hidden until a reaction) */
+.fx{position:absolute;inset:0;pointer-events:none;z-index:2;--k:1}
+.fx[data-kind=boop]{--k:.5}
+.fx[data-kind=boop] .pt:nth-child(n+6){display:none}
+.pt{position:absolute;left:50%;top:50%;margin:-6px 0 0 -6px;width:12px;height:12px;display:grid;place-items:center;
+  font-size:13px;line-height:1;color:#fff;text-shadow:0 0 6px #fff9,0 1px 2px #3b2a6b55;opacity:0}
+.pt:nth-child(3n+2){color:#ffd1ec}
+.pt:nth-child(3n){color:#bfe3ff}
+.ring{position:absolute;inset:-1px;border-radius:19px;border:2px solid #ffffffd0;opacity:0}
+.orbit{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0}
+.orbit b{position:absolute;left:-5px;top:-6px;font-size:10px;line-height:1;color:#fff;text-shadow:0 0 6px #fff9;transform:rotate(var(--a)) translateX(31px) rotate(calc(var(--a) * -1))}
+.fx.go .pt{animation:burst 1.05s cubic-bezier(.15,.75,.3,1) calc(var(--i) * 16ms + var(--t, 0ms)) both}
+.fx.go .ring{animation:ring .8s ease-out var(--t, 0ms) both}
+.fx[data-kind=surprise]{--t:420ms}
+
+.is-poke .hop,.is-boop .hop,.is-surprise .hop,.is-dizzy .bob,.is-dizzy .hop,.is-poke .bob,.is-boop .bob,.is-surprise .bob{will-change:transform}
+.is-poke .hop{animation:poke .32s ease-out}
+.is-boop .hop{animation:boop .7s cubic-bezier(.3,1.5,.5,1)}
+.is-boop .cheek{animation:blushpop .7s ease-out}
+.is-dizzy .spin{animation:dizzy 1.3s cubic-bezier(.45,0,.2,1)}
+.is-dizzy .eyes{animation:woozy 1.3s ease-in-out}
+.is-dizzy .orbit{animation:orbit 1.3s linear}
+.is-surprise .hop{animation:surprise 1.5s cubic-bezier(.2,.8,.3,1)}
+.is-surprise .eyes,.is-surprise .mouth{opacity:0;animation:none}
+.is-surprise .o-eyes,.is-surprise .o-mouth{opacity:1;animation:wide 1.5s ease-out}
+
+@keyframes bob{50%{transform:translateY(-2px)}}
+@keyframes hop{0%,82%,100%{transform:none}86%{transform:scale(1.08,.88)}91%{transform:translateY(-7px) scale(.94,1.08)}96%{transform:scale(1.06,.92)}98%{transform:scale(.99,1.01)}}
+@keyframes blink{0%,92%,100%{transform:none}96%{transform:scaleY(.08)}}
+@keyframes blush{50%{opacity:.55;transform:scale(1.15)}}
+@keyframes smile{0%,84%,100%{transform:none}90%,96%{transform:scale(1.25,1.2)}}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}25%{opacity:1;transform:scale(1.15) rotate(35deg)}55%{opacity:0;transform:scale(.5) rotate(80deg)}}
+@keyframes poke{35%{transform:scale(1.14,.86)}70%{transform:scale(.96,1.05)}}
+@keyframes boop{25%{transform:translateY(2px) scale(1.25,.75)}55%{transform:translateY(-6px) scale(.88,1.14)}80%{transform:scale(1.05,.96)}}
+@keyframes blushpop{30%{opacity:1;transform:scale(1.7)}}
+@keyframes dizzy{0%{transform:rotate(0)}85%{transform:rotate(740deg)}100%{transform:rotate(720deg)}}
+@keyframes woozy{0%,100%{transform:none}25%{transform:scale(1,.5)}50%{transform:scale(1.15,1.15)}75%{transform:scale(1,.5)}}
+@keyframes orbit{0%{opacity:0;transform:rotate(0)}12%,82%{opacity:1}100%{opacity:0;transform:rotate(720deg)}}
+@keyframes surprise{0%{transform:none}12%{transform:scale(1.15,.8)}30%{transform:translateY(-18px) scale(.9,1.15)}50%{transform:translateY(-20px) scale(1.05,.95)}68%{transform:scale(1.18,.82)}80%{transform:scale(.95,1.06)}100%{transform:none}}
+@keyframes wide{0%{transform:scale(.4)}25%{transform:scale(1.3)}60%{transform:scale(1)}}
+@keyframes burst{0%{opacity:0;transform:translate(0,0) scale(.3) rotate(0)}15%{opacity:1}100%{opacity:0;transform:translate(calc(var(--dx) * var(--k) * 1px),calc(var(--dy) * var(--k) * 1px)) scale(1) rotate(var(--r))}}
+@keyframes ring{0%{opacity:0;transform:scale(.92)}12%{opacity:.9}100%{opacity:0;transform:scale(1.9)}}
+
+body.still *{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){.bob,.hop,.eyes,.cheek,.mouth,.sp,.spin,.pt,.ring,.orbit{animation:none!important}}
