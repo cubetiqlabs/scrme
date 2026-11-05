@@ -4,4 +4,6 @@
 #[cfg(target_os = "macos")]
 pub(crate) mod overlay_macos;
 #[cfg(target_os = "macos")]
+pub(crate) mod pin_macos;
+#[cfg(target_os = "macos")]
 pub(crate) mod toast_macos;

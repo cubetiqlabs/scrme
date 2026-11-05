@@ -40,7 +40,7 @@ const ui = createUI({
     st.sizeKey = key; ui.setSize(key);
     if (st.selected && 'size' in st.selected) history.run(patchCmd(st.selected, { size: sizeFor(st.selected.type) }));
   },
-  onUndo: () => undo(), onRedo: () => redo(), onCopy: () => send('copy_rgba', 'Copied'), onSave: () => send('save_rgba', 'Saved'),
+  onUndo: () => undo(), onRedo: () => redo(), onCopy: () => send('copy_rgba', 'Copied'), onSave: () => send('save_rgba', 'Saved'), onPin: () => send('pin_rgba', 'Pinned'),
   onClose: () => invoke('close_editor'),
 });
 
@@ -287,6 +287,7 @@ addEventListener('keydown', e => {
     if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (k === 'c') { e.preventDefault(); send('copy_rgba', 'Copied'); }
     else if (k === 's') { e.preventDefault(); send('save_rgba', 'Saved'); }
+    else if (k === 'p') { e.preventDefault(); send('pin_rgba', 'Pinned'); }
     else if (k === '=' || k === '+') { e.preventDefault(); view.zoomBy(1.25); }
     else if (k === '-') { e.preventDefault(); view.zoomBy(0.8); }
     else if (k === '0') { e.preventDefault(); e.shiftKey ? view.actual() : view.fit(); }
@@ -311,6 +312,20 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => {
   if (e.key === ' ') { st.space = false; setTool(st.tool); }
 });
+
+/** Forget the current image (window is hidden but kept warm): frees the bitmap and canvases. */
+function reset() {
+  endText(false); cancelCrop(); hideLoupe();
+  st.selected = null; st.live = null; st.pointer = null;
+  history.reset();
+  st.bitmap?.close?.(); st.bitmap = null;
+  for (const c of [$('base'), $('scene')]) { c.width = 1; c.height = 1; }
+  st.doc = null; ui.setInfo('');
+}
+
+// Rust calls these on a warm (hidden) window: __open loads the new image, __reset releases it.
+window.__open = () => { reset(); return load().catch(err => ui.flash(String(err), true)); };
+window.__reset = reset;
 
 // Frameless window: the toolbar is the drag handle; the page loads its own image.
 load().catch(err => ui.flash(String(err), true));

@@ -110,9 +110,23 @@ pub(crate) fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
 #[tauri::command]
 pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    copy_image(&app, img);
+    copy_image(&app, &img);
     trim_memory();
     Ok(())
+}
+
+/// Put an image in the editor (the preview's Edit button, ⇧-release, "capture & annotate").
+pub(crate) fn open_editor_with(app: &AppHandle, img: RgbaImage) {
+    let (w, h) = img.dimensions();
+    *app.state::<Pending>().0.lock().unwrap() = Some(img);
+    open_editor(app, w, h);
+}
+
+/// Float the edited screenshot above everything (native window; macOS only for now).
+#[tauri::command]
+pub(crate) fn pin_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+    let img = rgba_from(&req).ok_or("bad image")?;
+    crate::preview::show_pin(&app, img)
 }
 
 /// Plain text to the clipboard (e.g. the eyedropper's hex).
@@ -129,10 +143,8 @@ pub(crate) fn save_rgba(req: tauri::ipc::Request) -> Result<String, String> {
 #[tauri::command]
 pub(crate) fn close_editor(app: AppHandle, state: tauri::State<Pending>) {
     state.0.lock().unwrap().take();
-    // Destroy (not hide): frees the webview process and the image; it is rebuilt on the next edit.
-    if let Some(w) = app.get_webview_window("editor") {
-        let _ = w.destroy();
-    }
+    // Hide + release the image, keep the webview warm briefly (instant re-open), then destroy it.
+    park_editor(&app);
     trim_memory();
 }
 

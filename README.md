@@ -8,7 +8,7 @@ Tiny, fast screenshot app for the menu bar. Press a shortcut, drag an area, and 
 
 - **Instant area capture** — freeze the screen, drag, copied. No window, no Dock icon.
 - **Screen and window capture** with one shortcut each.
-- **Quick editor** — arrows, boxes, text, highlight, blur, numbered markers, undo/redo.
+- **Quick editor** — pen, arrows, boxes, text, highlight, blur, numbered markers, ruler, color picker, crop, undo/redo, and **Pin to screen** (floats the screenshot above everything).
 - **Preferences** — rebind shortcuts live, optional auto-save to `~/Pictures/scrme`.
 - **Auto-update** — checks in the background, or use **Check for Updates…** in the tray menu.
 
