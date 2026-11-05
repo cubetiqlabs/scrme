@@ -1,6 +1,6 @@
 [package]
 name = "scrme"
-version = "0.1.3"
+version = "0.1.4"
 description = "Tiny, fast screenshot app for the menu bar"
 authors = ["Sambo Chea"]
 license = "MIT"
