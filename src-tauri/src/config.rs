@@ -10,14 +10,14 @@ pub(crate) struct Config {
     pub(crate) area: String,
     pub(crate) full: String,
     pub(crate) window: String,
-    /// Capture an area and open it straight in the editor.
-    pub(crate) edit: String,
     /// Also write a PNG to ~/Pictures/scrme on every quick capture.
     pub(crate) autosave: bool,
     /// Show the success toast.
     pub(crate) animation: bool,
     /// Check for updates on launch and every few hours; download in the background.
     pub(crate) auto_update: bool,
+    /// Start scrme (in the menu bar) when you log in.
+    pub(crate) launch_at_login: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -25,10 +25,10 @@ impl Default for Config {
             area: "Cmd+Shift+2".into(),
             full: "Cmd+Shift+1".into(),
             window: "Cmd+Shift+3".into(),
-            edit: "Cmd+Shift+4".into(),
             autosave: false,
             animation: true,
             auto_update: true,
+            launch_at_login: false,
         }
     }
 }
@@ -38,7 +38,6 @@ pub(crate) struct Keys {
     pub(crate) area: Shortcut,
     pub(crate) full: Shortcut,
     pub(crate) window: Shortcut,
-    pub(crate) edit: Shortcut,
 }
 impl Keys {
     pub(crate) fn parse(c: &Config) -> Result<Self, String> {
@@ -47,7 +46,6 @@ impl Keys {
             area: p("Area", &c.area)?,
             full: p("Screen", &c.full)?,
             window: p("Window", &c.window)?,
-            edit: p("Annotate", &c.edit)?,
         };
         let all = k.all();
         if all.iter().enumerate().any(|(i, a)| all[..i].contains(a)) {
@@ -56,8 +54,8 @@ impl Keys {
         Ok(k)
     }
 
-    pub(crate) fn all(&self) -> [Shortcut; 4] {
-        [self.area, self.full, self.window, self.edit]
+    pub(crate) fn all(&self) -> [Shortcut; 3] {
+        [self.area, self.full, self.window]
     }
 }
 
@@ -87,6 +85,18 @@ pub(crate) fn write_config(app: &AppHandle, cfg: &Config) -> std::io::Result<()>
 }
 
 /// Load config, register the global hotkeys and publish `Settings` as app state.
+/// Make the login item match the setting (a LaunchAgent on macOS). Cheap no-op when it already does.
+pub(crate) fn apply_autostart(app: &AppHandle, want: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let is_on = launcher.is_enabled().map_err(|e| e.to_string())?;
+    match (want, is_on) {
+        (true, false) => launcher.enable().map_err(|e| e.to_string()),
+        (false, true) => launcher.disable().map_err(|e| e.to_string()),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn init(app: &tauri::App) {
     let handle = app.handle();
     let cfg = load_config(handle);
@@ -100,6 +110,9 @@ pub(crate) fn init(app: &tauri::App) {
             eprintln!("cannot register {s}: {e}");
         }
     }
+    if let Err(e) = apply_autostart(handle, cfg.launch_at_login) {
+        eprintln!("launch at login: {e}");
+    }
     app.manage(Settings {
         cfg: Mutex::new(cfg),
         keys: Mutex::new(keys),
@@ -109,16 +122,6 @@ pub(crate) fn init(app: &tauri::App) {
 #[cfg(test)]
 mod tests {
     use super::{Config, Keys};
-
-    #[test]
-    fn annotate_must_differ_from_the_others() {
-        let c = Config {
-            edit: Config::default().area,
-            ..Config::default()
-        };
-        assert!(Keys::parse(&c).is_err());
-        assert_eq!(Keys::parse(&Config::default()).unwrap().all().len(), 4);
-    }
 
     #[test]
     fn keys_parse_and_dupes_rejected() {

@@ -9,21 +9,23 @@
 //! move, scroll/pinch to resize, Esc / double-click / right-click closes.
 
 use std::cell::{Cell, RefCell};
+use std::path::PathBuf;
 
 use block2::RcBlock;
 use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
+use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{
     AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel,
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSImage,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSDragOperation,
+    NSDraggingContext, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSImage,
     NSImageScaling, NSImageSymbolConfiguration, NSImageView, NSScreen, NSTrackingArea,
     NSTrackingAreaOptions, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::CGColor;
-use objc2_foundation::{NSData, NSString, NSTimer};
+use objc2_foundation::{NSArray, NSData, NSObjectProtocol, NSPoint, NSString, NSTimer, NSURL};
 
 /// What the user asked for on a pin/preview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +43,9 @@ pub(crate) struct Options {
     pub(crate) max_points: Option<(f64, f64)>,
     /// Bottom-right corner (preview) instead of centred with a cascade (pin).
     pub(crate) corner: bool,
+    /// Makes the picture draggable into other apps (as this file); the window then no longer
+    /// moves by dragging. Called when a drag starts.
+    pub(crate) drag: Option<Box<dyn Fn() -> Option<PathBuf>>>,
 }
 
 struct Ivars {
@@ -49,6 +54,8 @@ struct Ivars {
     remaining: Cell<f64>,
     auto: Cell<bool>,
     timer: RefCell<Option<Retained<NSTimer>>>,
+    drag: Option<Box<dyn Fn() -> Option<PathBuf>>>,
+    drag_started: Cell<bool>,
 }
 
 const FOOTER_H: f64 = 28.0;
@@ -84,7 +91,25 @@ define_class!(
 
         #[unsafe(method(mouseDownCanMoveWindow))]
         fn mouse_down_can_move_window(&self) -> bool {
-            true // drag anywhere on the picture to move it
+            self.ivars().drag.is_none() // pins move by dragging; previews are dragged *out*
+        }
+
+        #[unsafe(method(mouseDragged:))]
+        fn mouse_dragged(&self, event: &NSEvent) {
+            if self.ivars().drag.is_none() {
+                // SAFETY: forwards to the superclass implementation (window dragging).
+                return unsafe { msg_send![super(self), mouseDragged: event] };
+            }
+            if !self.ivars().drag_started.replace(true) {
+                self.begin_drag(event);
+            }
+        }
+
+        #[unsafe(method(mouseUp:))]
+        fn mouse_up(&self, event: &NSEvent) {
+            self.ivars().drag_started.set(false);
+            // SAFETY: forwards to the superclass implementation.
+            unsafe { msg_send![super(self), mouseUp: event] }
         }
 
         #[unsafe(method(mouseDown:))]
@@ -177,6 +202,25 @@ define_class!(
             self.dismiss(Action::Close);
         }
     }
+
+    // SAFETY: `NSObjectProtocol` has no safety requirements.
+    unsafe impl NSObjectProtocol for PinView {}
+
+    // SAFETY: the two methods match NSDraggingSource's required/optional signatures.
+    unsafe impl NSDraggingSource for PinView {
+        #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+        fn source_operation_mask(&self, _session: &NSDraggingSession, _context: NSDraggingContext) -> NSDragOperation {
+            NSDragOperation::Copy
+        }
+
+        #[unsafe(method(draggingSession:endedAtPoint:operation:))]
+        fn drag_ended(&self, _session: &NSDraggingSession, _at: NSPoint, operation: NSDragOperation) {
+            self.ivars().drag_started.set(false);
+            if operation != NSDragOperation::None {
+                self.dismiss(Action::Close); // dropped somewhere: the preview has done its job
+            }
+        }
+    }
 );
 
 thread_local! {
@@ -188,6 +232,28 @@ thread_local! {
 }
 
 impl PinView {
+    /// Drag the capture out as a file (uploads, chat, design tools…), like the macOS thumbnail.
+    fn begin_drag(&self, event: &NSEvent) {
+        let Some(path) = self.ivars().drag.as_ref().and_then(|f| f()) else {
+            return;
+        };
+        self.keep(); // never vanish mid-drag
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+        let writer = ProtocolObject::from_ref(&*url);
+        let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), writer);
+        let image = self.image();
+        // SAFETY: the dragging image is just the thumbnail shown in this view.
+        unsafe {
+            item.setDraggingFrame_contents(self.bounds(), image.as_deref().map(|i| i as &AnyObject))
+        };
+        let items = NSArray::from_slice(&[&*item]);
+        self.beginDraggingSessionWithItems_event_source(
+            &items,
+            event,
+            ProtocolObject::from_ref(self),
+        );
+    }
+
     /// Stop auto-dismissal (the preview becomes a normal pin).
     fn keep(&self) {
         let iv = self.ivars();
@@ -361,6 +427,8 @@ pub(crate) fn show(
         remaining: Cell::new(auto.unwrap_or(0.0)),
         auto: Cell::new(auto.is_some()),
         timer: RefCell::new(None),
+        drag: opts.drag,
+        drag_started: Cell::new(false),
     });
     // SAFETY: `initWithFrame:` is NSImageView's designated initialiser.
     let view: Retained<PinView> = unsafe {

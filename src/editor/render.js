@@ -4,6 +4,7 @@
 // compositor layer. The image itself is a GPU ImageBitmap drawn with drawImage.
 
 import { SHAPES } from './shapes.js';
+import { canvasRect } from './doc.js';
 
 export function createRenderer(canvas, getState) {
   const ctx = canvas.getContext('2d');
@@ -21,13 +22,17 @@ export function createRenderer(canvas, getState) {
     // image (pixelated when zoomed in far enough to see pixels)
     ctx.imageSmoothingEnabled = z < 3;
     ctx.imageSmoothingQuality = 'high';
+    // The canvas grows to hold annotations dragged outside the image; the extra area is white.
+    const r = canvasRect(doc, o => SHAPES[o.type].bounds(o));
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.drawImage(bitmap, 0, 0);
     ctx.lineWidth = 1 / z; ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.strokeRect(-0.5 / z, -0.5 / z, doc.w + 1 / z, doc.h + 1 / z);
+    ctx.strokeRect(r.x - 0.5 / z, r.y - 0.5 / z, r.w + 1 / z, r.h + 1 / z);
 
-    // annotations are clipped to the image
+    // annotations are clipped to the canvas
     ctx.save();
-    ctx.beginPath(); ctx.rect(0, 0, doc.w, doc.h); ctx.clip();
+    ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
     const env = { base: bitmap, unit, dpr };
     for (const o of doc.objects) if (!o.hidden) SHAPES[o.type].draw(ctx, o, env);
     if (live) SHAPES[live.type].draw(ctx, live, env);

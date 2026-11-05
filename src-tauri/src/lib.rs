@@ -13,6 +13,7 @@ mod pasteboard;
 mod platform;
 mod preview;
 mod state;
+mod store;
 mod tiff;
 mod toast;
 mod tray;
@@ -34,6 +35,10 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             handle_args(app, argv.iter().skip(1));
         }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
@@ -51,7 +56,7 @@ pub fn run() {
         )
         .manage(state::Frozen::default())
         .manage(state::Pending::default())
-        .manage(state::EditMode::default())
+        .manage(store::Latest::default())
         .manage(update::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::commit,
@@ -78,6 +83,7 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             config::init(app);
+            store::restore(app.handle());
             tray::build(app)?;
 
             // Non-macOS: warm the hidden webview overlay/toast in the background so startup

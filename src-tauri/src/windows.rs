@@ -58,7 +58,7 @@ pub(crate) fn open_settings(app: &AppHandle) {
     }
     let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Preferences")
-        .inner_size(440.0, 734.0)
+        .inner_size(440.0, 770.0)
         .decorations(false)
         .transparent(true)
         .shadow(true)

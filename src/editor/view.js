@@ -3,7 +3,7 @@
 
 export function createView(viewport, onChange = () => {}) {
   const dpr = () => window.devicePixelRatio || 1;
-  let z = 1, x = 0, y = 0, iw = 1, ih = 1;
+  let z = 1, x = 0, y = 0, iw = 1, ih = 1, cx = 0, cy = 0; // cx,cy,iw,ih = the canvas rect (image + overflow)
   let auto = true; // keep the image fitted until the user zooms or pans
   const scale = () => z / dpr();
   const apply = () => onChange(z);
@@ -13,14 +13,20 @@ export function createView(viewport, onChange = () => {}) {
     get x() { return x; },
     get y() { return y; },
     get scale() { return scale(); },
-    setImage(w, h) { iw = w; ih = h; view.fit(); },
+    /** Load/crop: a new image, always refit. */
+    setImage(w, h) { view.setCanvas({ x: 0, y: 0, w, h }, true); },
+    /** The canvas grew/shrank (annotations moved outside the image): refit unless the user took over. */
+    setCanvas(rect, force = false) {
+      cx = rect.x; cy = rect.y; iw = rect.w; ih = rect.h;
+      if (force || auto) view.fit();
+    },
     fit(pad = 56) {
       auto = true;
       const r = viewport.getBoundingClientRect();
       const s = Math.min(1 / dpr(), (r.width - pad * 2) / iw, (r.height - pad * 2) / ih);
       z = Math.max(0.1, s * dpr());
-      x = (r.width - iw * scale()) / 2;
-      y = (r.height - ih * scale()) / 2;
+      x = (r.width - iw * scale()) / 2 - cx * scale();
+      y = (r.height - ih * scale()) / 2 - cy * scale();
       apply();
     },
     actual() { view.zoomTo(1); },

@@ -50,17 +50,23 @@ export const SHAPES = {
     translate: (o, dx, dy) => ({ x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }),
   },
   arrow: {
+    // A tapered look: slimmer shaft that ends inside a generous, softly rounded head.
     draw(ctx, o) {
-      stroke(ctx, o);
       const a = { x: o.x1, y: o.y1 }, b = { x: o.x2, y: o.y2 };
-      const head = o.size * 4.5;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      const [p, q] = arrowBarbs(a, b, head);
-      ctx.fillStyle = o.color;
-      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.closePath(); ctx.fill();
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len < 1) return;
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const head = Math.min(Math.max(o.size * 4.2, 16), len);      // barb length
+      const base = { x: b.x - Math.cos(ang) * head * 0.78, y: b.y - Math.sin(ang) * head * 0.78 };
+      ctx.strokeStyle = o.color; ctx.fillStyle = o.color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.lineWidth = o.size * 0.62;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(base.x, base.y); ctx.stroke();
+      const [p, q] = arrowBarbs(a, b, head, 0.5);
+      ctx.lineWidth = o.size * 0.3; // rounds the three corners of the head
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.closePath(); ctx.fill(); ctx.stroke();
     },
     hit: (o, p, tol) => distToSegment(p, { x: o.x1, y: o.y1 }, { x: o.x2, y: o.y2 }) <= tol + o.size / 2,
-    bounds: o => boundsOf(ptsOfLine(o), o.size * 2),
+    bounds: o => boundsOf(ptsOfLine(o), o.size * 3),
     translate: (o, dx, dy) => ({ x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }),
   },
   ruler: {

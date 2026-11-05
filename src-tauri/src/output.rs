@@ -36,10 +36,24 @@ pub(crate) fn copy_image(app: &AppHandle, img: &RgbaImage) {
     }
 }
 
-pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
+/// `~/Pictures/scrme`, created on demand.
+fn pictures_dir() -> Result<std::path::PathBuf, String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
     let dir = std::path::Path::new(&home).join("Pictures/scrme");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Autosave without a second encode: the capture is already a PNG, so copy that file.
+fn autosave_copy(src: &std::path::Path) -> Result<(), String> {
+    let name = src.file_name().ok_or("no file name")?;
+    std::fs::copy(src, pictures_dir()?.join(name))
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
+    let dir = pictures_dir()?;
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis());
@@ -52,16 +66,24 @@ pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
 /// then the toast, then the optional file write.
 pub(crate) fn finish(app: &AppHandle, img: RgbaImage) {
     let cfg = app.state::<Settings>().cfg.lock().unwrap().clone();
-    let saved = cfg.autosave.then(|| img.clone());
-    copy_image(app, &img);
+    // Held until the capture's PNG exists, so the preview's buttons (Edit, Save as, drag-out)
+    // never see the previous capture while this one is still being written.
+    let latest = app.state::<crate::store::Latest>();
+    let mut slot = latest.0.lock().unwrap();
     if cfg.animation {
-        // A small floating preview with Edit / Copy / Save as… (replaces the old success toast).
-        crate::preview::show_preview(app, img);
+        // Preview first: it only needs a small thumbnail, so it is on screen within a few ms,
+        // while the (slower) clipboard write and PNG encode follow right after.
+        crate::preview::show_preview(app, &img);
     }
-    if let Some(img) = saved
-        && let Err(e) = save_png(&img)
+    copy_image(app, &img);
+    *slot = crate::store::write_png(app, &img, slot.take());
+    if cfg.autosave
+        && let Some(path) = slot.as_ref()
+        && let Err(e) = autosave_copy(path)
     {
         eprintln!("autosave failed: {e}");
     }
+    drop(slot);
+    drop(img); // nothing big stays in memory: the capture now lives on disk
     trim_memory();
 }
