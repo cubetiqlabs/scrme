@@ -8,6 +8,17 @@ export const SIZES = ['S', 'M', 'L'];
 
 const button = (attrs, inner) => `<button class="b" ${attrs}>${inner}</button>`;
 
+// Tools in the dock, split into logical groups (thin separators between them).
+const GROUPS = [
+  ['select'],
+  ['pen', 'arrow', 'line'],
+  ['rect', 'ellipse'],
+  ['highlighter', 'text', 'marker', 'blur'],
+  ['ruler', 'picker', 'crop'],
+];
+const toolButton = t => button(`data-tool="${t.id}" title="${t.label} (${t.key.toUpperCase()})"`, icon(t.id));
+const dock = () => GROUPS.map(g => g.map(id => toolButton(TOOLS.find(t => t.id === id))).join('')).join('<i class="sep"></i>');
+
 export function createUI(h) {
   const bar = document.getElementById('bar');
   bar.innerHTML = `
@@ -18,9 +29,7 @@ export function createUI(h) {
       ${button('id="pin" title="Pin to screen (⌘P)"', icon('pin'))}
     </div>
     <i class="sep"></i>
-    <div class="grp" id="tools">
-      ${TOOLS.map(t => button(`data-tool="${t.id}" title="${t.label} (${t.key.toUpperCase()})"`, icon(t.id))).join('')}
-    </div>
+    <div class="dock" id="tools">${dock()}</div>
     <i class="sep"></i>
     <button class="b style" id="style" title="Color and size">
       <span class="dot" id="dot"></span><span class="lbl" id="sizeLbl">M</span>

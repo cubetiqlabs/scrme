@@ -83,7 +83,7 @@ fn build_editor(app: &AppHandle) -> Option<WebviewWindow> {
         .decorations(false)
         .transparent(true)
         .shadow(true)
-        .min_inner_size(840.0, 400.0)
+        .min_inner_size(780.0, 400.0)
         .visible(false)
         .build()
         .ok()
@@ -134,8 +134,8 @@ pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
     };
     // Image in points + toolbar + breathing room, capped to a sensible window.
     let s = win.scale_factor().unwrap_or(1.0);
-    let lw = (w as f64 / s + 120.0).clamp(840.0, 1400.0);
-    let lh = (h as f64 / s + 44.0 + 120.0).clamp(400.0, 900.0);
+    let lw = (w as f64 / s + 120.0).clamp(780.0, 1400.0);
+    let lh = (h as f64 / s + 40.0 + 120.0).clamp(400.0, 900.0);
     let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     let _ = win.center();
     raise(app, &win);
