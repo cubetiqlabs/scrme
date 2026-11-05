@@ -50,6 +50,12 @@ Always use the **latest major version** of every action (e.g. `actions/checkout@
 
 A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
 
+## Capture + clipboard internals (macOS)
+
+- `capture/macos.rs` keeps the frozen screenshot as a `CGImage` and reads its BGRA bytes once per crop; only the selected rows are converted to RGBA (xcap copied the whole retina frame 3x). xcap stays as the fallback.
+- The clipboard on macOS is written natively (`pasteboard.rs` + `tiff.rs`: a hand-built uncompressed RGB TIFF moved into an `NSData`). `arboard`/the clipboard plugin retained 29-58 MB per full-screen copy forever; do not route images through them on macOS. `output::trim_memory()` returns cached malloc pages after captures.
+- Regression tests that need Screen Recording permission are `#[ignore]`d: `cargo test --lib capture::macos -- --ignored --nocapture` (pixel parity with xcap, no flip, no accumulation over repeated captures).
+
 ## Performance budget
 
 Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): app 31 MB + WebKit helpers ~47 MB physical footprint, 0.0% CPU. Keep it there: no polling loops (the only timer is the 6 h update check), animations are CSS transform/opacity only and pause when the window is unfocused/hidden (`body.still`), no animated blur, big buffers (the frozen frame) are `take()`n and dropped on commit/cancel, and the editor webview is destroyed on close. Check with `scripts/measure.sh` (or `footprint -p <pid>` and `ps -o pcpu`).

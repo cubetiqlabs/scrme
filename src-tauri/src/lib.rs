@@ -8,7 +8,10 @@ mod capture;
 mod commands;
 mod config;
 mod output;
+#[cfg(target_os = "macos")]
+mod pasteboard;
 mod state;
+mod tiff;
 mod toast;
 mod tray;
 mod update;

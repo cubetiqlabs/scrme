@@ -3,10 +3,8 @@ use std::time::Instant;
 use crate::{capture::*, config::*, output::*, state::*, tray::*, windows::*};
 use image::RgbaImage;
 use serde::Serialize;
-use tauri::image::Image;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[tauri::command]
@@ -23,14 +21,17 @@ pub(crate) fn commit(
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
-    let Some(img) = state.0.lock().unwrap().take() else {
+    let Some(frame) = state.0.lock().unwrap().take() else {
         return;
     };
-    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, img.width(), img.height()) else {
+    let (iw, ih) = frame.size();
+    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, iw, ih) else {
         return;
     };
-    let crop = image::imageops::crop_imm(&img, cx, cy, cw, ch).to_image();
-    drop(img);
+    let Some(crop) = frame.crop(cx, cy, cw, ch) else {
+        return;
+    };
+    drop(frame); // release the screenshot before the (slower) clipboard/editor work
     if edit {
         *app.state::<Pending>().0.lock().unwrap() = Some(crop);
         open_editor(&app, cw, ch);
@@ -46,6 +47,7 @@ pub(crate) fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
+    trim_memory();
 }
 
 #[tauri::command]
@@ -83,10 +85,9 @@ pub(crate) fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
 #[tauri::command]
 pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    let (w, h) = img.dimensions();
-    app.clipboard()
-        .write_image(&Image::new_owned(img.into_raw(), w, h))
-        .map_err(|e| e.to_string())
+    copy_image(&app, img);
+    trim_memory();
+    Ok(())
 }
 
 #[tauri::command]
@@ -101,6 +102,7 @@ pub(crate) fn close_editor(app: AppHandle, state: tauri::State<Pending>) {
     if let Some(w) = app.get_webview_window("editor") {
         let _ = w.destroy();
     }
+    trim_memory();
 }
 
 #[derive(Serialize)]
