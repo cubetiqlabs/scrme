@@ -25,6 +25,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml                   # format
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 ```
 
+CI uses the latest stable toolchain, so `rustup update stable` first; an older local clippy misses new lints (CI once failed on `chunks_exact` → `as_chunks`).
+
 ## Principles
 
 - **Fast + light first.** No frontend framework or npm deps. Don't add a crate for what a few lines do.
@@ -49,6 +51,12 @@ Always use the **latest major version** of every action (e.g. `actions/checkout@
 ## CLI / automation
 
 A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
+
+## Capture + clipboard internals (macOS)
+
+- `capture/macos.rs` keeps the frozen screenshot as a `CGImage` and reads its BGRA bytes once per crop; only the selected rows are converted to RGBA (xcap copied the whole retina frame 3x). xcap stays as the fallback.
+- The clipboard on macOS is written natively (`pasteboard.rs` + `tiff.rs`: a hand-built uncompressed RGB TIFF moved into an `NSData`). `arboard`/the clipboard plugin retained 29-58 MB per full-screen copy forever; do not route images through them on macOS. `output::trim_memory()` returns cached malloc pages after captures.
+- Regression tests that need Screen Recording permission are `#[ignore]`d: `cargo test --lib capture::macos -- --ignored --nocapture` (pixel parity with xcap, no flip, no accumulation over repeated captures).
 
 ## Performance budget
 

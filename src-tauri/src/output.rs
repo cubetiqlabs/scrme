@@ -1,14 +1,39 @@
 use crate::{config::*, toast::*};
 use image::RgbaImage;
+#[cfg(not(target_os = "macos"))]
 use tauri::image::Image;
 use tauri::{AppHandle, Manager};
+#[cfg(not(target_os = "macos"))]
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
+/// Hand freed-but-cached pages back to the OS. libmalloc keeps freed large blocks (our
+/// ~30 MB screenshot buffers) cached, which Activity Monitor shows as 100+ MB of growth.
+pub(crate) fn trim_memory() {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
+        }
+        // SAFETY: documented libmalloc call; a null zone means "all zones", goal 0 = as much as possible.
+        unsafe { malloc_zone_pressure_relief(std::ptr::null_mut(), 0) };
+    }
+}
+
+/// Put an image on the system clipboard.
 pub(crate) fn copy_image(app: &AppHandle, img: RgbaImage) {
-    let (w, h) = img.dimensions();
-    let _ = app
-        .clipboard()
-        .write_image(&Image::new_owned(img.into_raw(), w, h));
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app; // native pasteboard path needs no plugin
+        if let Err(e) = crate::pasteboard::set_tiff(crate::tiff::rgb_tiff(&img)) {
+            eprintln!("clipboard write failed: {e}");
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let (w, h) = img.dimensions();
+        let image = Image::new_owned(img.into_raw(), w, h);
+        let _ = app.clipboard().write_image(&image);
+    }
 }
 
 pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
@@ -44,4 +69,5 @@ pub(crate) fn finish(app: &AppHandle, img: RgbaImage) {
     {
         eprintln!("autosave failed: {e}");
     }
+    trim_memory();
 }

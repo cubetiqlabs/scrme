@@ -1,7 +1,13 @@
+mod frame;
+#[cfg(target_os = "macos")]
+mod macos;
+
 use std::time::Instant;
 
 use crate::{output::*, state::*, toast::*, windows::*};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
+
+pub(crate) use frame::Frame;
 
 /// Crop rect in physical pixels, clamped to the image. None if empty.
 pub(crate) fn clamp_rect(
@@ -26,23 +32,35 @@ pub(crate) fn primary_monitor() -> Option<xcap::Monitor> {
         .find(|m| m.is_primary().unwrap_or(false))
 }
 
+/// Freeze the primary monitor. Returns the frame and the monitor's origin in physical pixels.
+/// macOS keeps a CGImage (cheap); anything else, or a failure, falls back to xcap's RGBA copy.
+pub(crate) fn freeze_primary() -> Option<(Frame, PhysicalPosition<f64>)> {
+    let mon = primary_monitor()?;
+    let scale = mon.scale_factor().unwrap_or(1.0) as f64;
+    let origin = PhysicalPosition::new(
+        mon.x().unwrap_or(0) as f64 * scale,
+        mon.y().unwrap_or(0) as f64 * scale,
+    );
+    #[cfg(target_os = "macos")]
+    if let Some(cg) = mon.id().ok().and_then(macos::freeze) {
+        return Some((Frame::Cg(cg), origin));
+    }
+    mon.capture_image()
+        .ok()
+        .map(|img| (Frame::Rgba(img), origin))
+}
+
 /// Freeze the primary monitor, then show the (pre-built) transparent overlay.
 pub(crate) fn start_area_capture(app: &AppHandle) {
     let t = Instant::now();
     // ponytail: primary monitor only; one overlay per monitor for multi-display.
-    let Some(mon) = primary_monitor() else { return };
-    let Ok(img) = mon.capture_image() else {
+    let Some((frame, pos)) = freeze_primary() else {
         eprintln!("capture failed (Screen Recording permission?)");
         show_toast_err(app, "Capture failed");
         return;
     };
-    let scale = mon.scale_factor().unwrap_or(1.0) as f64;
-    let pos = PhysicalPosition::new(
-        mon.x().unwrap_or(0) as f64 * scale,
-        mon.y().unwrap_or(0) as f64 * scale,
-    );
-    let size = PhysicalSize::new(img.width(), img.height());
-    *app.state::<Frozen>().0.lock().unwrap() = Some(img);
+    let (w, h) = frame.size();
+    *app.state::<Frozen>().0.lock().unwrap() = Some(frame);
 
     let Some(win) = app
         .get_webview_window("overlay")
@@ -51,7 +69,7 @@ pub(crate) fn start_area_capture(app: &AppHandle) {
         return;
     };
     let _ = win.set_position(pos);
-    let _ = win.set_size(size);
+    let _ = win.set_size(PhysicalSize::new(w, h));
     let _ = win.show();
     let _ = win.set_focus();
     let _ = win.eval("window.__arm&&window.__arm()");
@@ -59,7 +77,7 @@ pub(crate) fn start_area_capture(app: &AppHandle) {
 }
 
 pub(crate) fn capture_full(app: &AppHandle) {
-    match primary_monitor().and_then(|m| m.capture_image().ok()) {
+    match freeze_primary().and_then(|(frame, _)| frame.into_rgba()) {
         Some(img) => finish(app, img),
         None => show_toast_err(app, "Capture failed"),
     }
