@@ -25,6 +25,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml                   # format
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
 ```
 
+CI uses the latest stable toolchain, so `rustup update stable` first; an older local clippy misses new lints (CI once failed on `chunks_exact` → `as_chunks`).
+
 ## Principles
 
 - **Fast + light first.** No frontend framework or npm deps. Don't add a crate for what a few lines do.

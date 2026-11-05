@@ -72,7 +72,8 @@ impl CgFrame {
             let start = row * stride + x * 4;
             out.extend_from_slice(&src[start..start + w * 4]);
         }
-        for px in out.chunks_exact_mut(4) {
+        let (pixels, _) = out.as_chunks_mut::<4>();
+        for px in pixels {
             px.swap(0, 2); // BGRA -> RGBA
             px[3] = 255; // screenshots are opaque
         }
@@ -87,10 +88,11 @@ mod tests {
 
     /// Mean absolute per-channel difference between two equally sized RGBA crops.
     fn diff(a: &image::RgbaImage, b: &image::RgbaImage) -> f64 {
-        let sum: u64 = a
-            .as_raw()
-            .chunks_exact(4)
-            .zip(b.as_raw().chunks_exact(4))
+        let (pa, _) = a.as_raw().as_chunks::<4>();
+        let (pb, _) = b.as_raw().as_chunks::<4>();
+        let sum: u64 = pa
+            .iter()
+            .zip(pb)
             .map(|(p, q)| (0..3).map(|i| p[i].abs_diff(q[i]) as u64).sum::<u64>())
             .sum();
         sum as f64 / (a.width() as f64 * a.height() as f64 * 3.0)

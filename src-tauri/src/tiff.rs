@@ -46,7 +46,8 @@ pub(crate) fn rgb_tiff(img: &RgbaImage) -> Vec<u8> {
         out.extend_from_slice(&8u16.to_le_bytes());
     }
     debug_assert_eq!(out.len() as u32, DATA_OFFSET);
-    for px in img.as_raw().chunks_exact(4) {
+    let (pixels, _) = img.as_raw().as_chunks::<4>();
+    for px in pixels {
         out.extend_from_slice(&px[..3]);
     }
     out
