@@ -5,6 +5,10 @@
 #
 # Launches the app, then reports: idle, after N `--screen` captures (+ CPU time per
 # capture), and with Preferences open. Build first: cargo build --release --manifest-path src-tauri/Cargo.toml
+#
+# Note: WebKit helper processes can't be attributed to an app without root, so helpers are
+# "processes that appeared after launch". Quit other web-view apps first for clean numbers
+# (the idle section is reliable: right after launch nothing else is starting up).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

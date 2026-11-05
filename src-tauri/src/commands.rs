@@ -17,10 +17,24 @@ pub(crate) fn commit(
     h: i64,
     edit: bool,
 ) {
-    let t = Instant::now();
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
+    commit_selection(&app, &state, x, y, w, h, edit);
+}
+
+/// Crop the frozen frame to the selection, then copy it (or open the editor).
+/// Shared by the webview overlay command and the native overlay.
+pub(crate) fn commit_selection(
+    app: &AppHandle,
+    state: &Frozen,
+    x: i64,
+    y: i64,
+    w: i64,
+    h: i64,
+    edit: bool,
+) {
+    let t = Instant::now();
     let Some(frame) = state.0.lock().unwrap().take() else {
         return;
     };
@@ -34,9 +48,9 @@ pub(crate) fn commit(
     drop(frame); // release the screenshot before the (slower) clipboard/editor work
     if edit {
         *app.state::<Pending>().0.lock().unwrap() = Some(crop);
-        open_editor(&app, cw, ch);
+        open_editor(app, cw, ch);
     } else {
-        finish(&app, crop);
+        finish(app, crop);
     }
     eprintln!("commit {:?}", t.elapsed());
 }
