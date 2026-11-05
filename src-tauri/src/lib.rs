@@ -10,6 +10,7 @@ mod config;
 mod output;
 #[cfg(target_os = "macos")]
 mod pasteboard;
+mod platform;
 mod state;
 mod tiff;
 mod toast;
@@ -17,6 +18,7 @@ mod tray;
 mod update;
 mod windows;
 
+#[cfg(not(target_os = "macos"))]
 use std::time::Duration;
 
 use tauri::Manager;
@@ -76,14 +78,17 @@ pub fn run() {
             config::init(app);
             tray::build(app)?;
 
-            // Tray + hotkeys are live; warm the hidden windows in the background so
-            // startup returns immediately. (A hotkey before this finishes builds the overlay itself.)
-            let h = app.handle().clone();
-            std::thread::spawn(move || {
-                let _ = windows::build_overlay(&h);
-                std::thread::sleep(Duration::from_millis(800));
-                let _ = toast::build_toast(&h, None);
-            });
+            // Non-macOS: warm the hidden webview overlay/toast in the background so startup
+            // returns immediately. macOS draws both natively (no webview, no helper processes).
+            #[cfg(not(target_os = "macos"))]
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    let _ = windows::build_overlay(&h);
+                    std::thread::sleep(Duration::from_millis(800));
+                    let _ = toast::build_toast(&h, None);
+                });
+            }
             update::spawn_auto_check(app.handle());
 
             // Flags given on a cold start (`scrme --prefs`) behave like a forwarded launch.

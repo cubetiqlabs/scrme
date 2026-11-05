@@ -52,6 +52,11 @@ impl CgFrame {
         (self.w, self.h)
     }
 
+    /// Another reference to the image (cheap retain), e.g. to show it in the native overlay.
+    pub(crate) fn image(&self) -> CFRetained<CGImage> {
+        self.image.clone()
+    }
+
     /// RGBA pixels of the rect (top-left origin, physical px, already clamped).
     ///
     /// Reads the image's own BGRA bytes once (`CGDataProvider` copy, freed on return) and
