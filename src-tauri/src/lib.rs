@@ -11,6 +11,7 @@ mod output;
 #[cfg(target_os = "macos")]
 mod pasteboard;
 mod platform;
+mod preview;
 mod state;
 mod tiff;
 mod toast;

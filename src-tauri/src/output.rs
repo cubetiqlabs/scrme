@@ -1,4 +1,4 @@
-use crate::{config::*, toast::*};
+use crate::config::*;
 use image::RgbaImage;
 #[cfg(not(target_os = "macos"))]
 use tauri::image::Image;
@@ -20,18 +20,18 @@ pub(crate) fn trim_memory() {
 }
 
 /// Put an image on the system clipboard.
-pub(crate) fn copy_image(app: &AppHandle, img: RgbaImage) {
+pub(crate) fn copy_image(app: &AppHandle, img: &RgbaImage) {
     #[cfg(target_os = "macos")]
     {
         let _ = app; // native pasteboard path needs no plugin
-        if let Err(e) = crate::pasteboard::set_tiff(crate::tiff::rgb_tiff(&img)) {
+        if let Err(e) = crate::pasteboard::set_tiff(crate::tiff::rgb_tiff(img)) {
             eprintln!("clipboard write failed: {e}");
         }
     }
     #[cfg(not(target_os = "macos"))]
     {
         let (w, h) = img.dimensions();
-        let image = Image::new_owned(img.into_raw(), w, h);
+        let image = Image::new_owned(img.as_raw().clone(), w, h);
         let _ = app.clipboard().write_image(&image);
     }
 }
@@ -53,16 +53,10 @@ pub(crate) fn save_png(img: &RgbaImage) -> Result<String, String> {
 pub(crate) fn finish(app: &AppHandle, img: RgbaImage) {
     let cfg = app.state::<Settings>().cfg.lock().unwrap().clone();
     let saved = cfg.autosave.then(|| img.clone());
-    copy_image(app, img);
+    copy_image(app, &img);
     if cfg.animation {
-        show_toast(
-            app,
-            if cfg.autosave {
-                "Copied & saved"
-            } else {
-                "Copied"
-            },
-        );
+        // A small floating preview with Edit / Copy / Save as… (replaces the old success toast).
+        crate::preview::show_preview(app, img);
     }
     if let Some(img) = saved
         && let Err(e) = save_png(&img)

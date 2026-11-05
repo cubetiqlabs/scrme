@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
+
+use crate::output::trim_memory;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub(crate) fn build_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
@@ -67,32 +71,74 @@ pub(crate) fn open_settings(app: &AppHandle) {
     }
 }
 
-pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
+/// Generation counter so only the newest "destroy the idle editor" timer acts.
+static EDITOR_GEN: AtomicU32 = AtomicU32::new(0);
+/// How long a hidden editor window is kept warm for an instant re-open.
+const EDITOR_KEEP_SECS: u64 = 90;
+
+fn build_editor(app: &AppHandle) -> Option<WebviewWindow> {
     // Frameless like Preferences: the editor draws its own glass toolbar (drag region + close).
-    let existing = app.get_webview_window("editor");
-    let reuse = existing.is_some();
-    let Some(win) = existing.or_else(|| {
-        WebviewWindowBuilder::new(app, "editor", WebviewUrl::App("editor.html".into()))
-            .title("scrme")
-            .decorations(false)
-            .transparent(true)
-            .shadow(true)
-            .min_inner_size(900.0, 420.0)
-            .visible(false)
-            .build()
-            .ok()
-    }) else {
+    WebviewWindowBuilder::new(app, "editor", WebviewUrl::App("editor.html".into()))
+        .title("scrme")
+        .decorations(false)
+        .transparent(true)
+        .shadow(true)
+        .min_inner_size(840.0, 400.0)
+        .visible(false)
+        .build()
+        .ok()
+}
+
+/// Destroy the editor window if it is still hidden after `EDITOR_KEEP_SECS` (frees the webview).
+fn schedule_editor_cleanup(app: &AppHandle) {
+    let id = EDITOR_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(EDITOR_KEEP_SECS));
+        if EDITOR_GEN.load(Ordering::SeqCst) != id {
+            return;
+        }
+        if let Some(w) = app.get_webview_window("editor")
+            && !w.is_visible().unwrap_or(false)
+        {
+            let _ = w.destroy();
+            trim_memory();
+        }
+    });
+}
+
+/// Build the (hidden) editor window ahead of time, e.g. while a preview is on screen,
+/// so the Edit button opens instantly. Unused, it is destroyed again after a while.
+pub(crate) fn prewarm_editor(app: &AppHandle) {
+    if app.get_webview_window("editor").is_none() && build_editor(app).is_some() {
+        schedule_editor_cleanup(app);
+    }
+}
+
+/// Hide the editor, release its image, and keep the webview warm for a short while.
+pub(crate) fn park_editor(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.eval("window.__reset&&window.__reset()");
+        let _ = w.hide();
+        schedule_editor_cleanup(app);
+    }
+}
+
+pub(crate) fn open_editor(app: &AppHandle, w: u32, h: u32) {
+    EDITOR_GEN.fetch_add(1, Ordering::SeqCst); // cancel a pending cleanup
+    let Some(win) = app
+        .get_webview_window("editor")
+        .or_else(|| build_editor(app))
+    else {
         return;
     };
-    // Image in points + toolbar (52) + breathing room, capped to a sensible window.
+    // Image in points + toolbar + breathing room, capped to a sensible window.
     let s = win.scale_factor().unwrap_or(1.0);
-    let lw = (w as f64 / s + 120.0).clamp(900.0, 1400.0);
-    let lh = (h as f64 / s + 52.0 + 120.0).clamp(420.0, 900.0);
+    let lw = (w as f64 / s + 120.0).clamp(840.0, 1400.0);
+    let lh = (h as f64 / s + 44.0 + 120.0).clamp(400.0, 900.0);
     let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     let _ = win.center();
     raise(app, &win);
-    // A page that is already open must pick up the new image; a new one loads it itself.
-    if reuse {
-        let _ = win.eval("location.reload()");
-    }
+    // A page that is already running loads the new image itself; one still starting up reloads.
+    let _ = win.eval("window.__open ? window.__open() : location.reload()");
 }

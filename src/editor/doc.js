@@ -46,6 +46,7 @@ export function createHistory(onChange = () => {}) {
     run(cmd) { cmd.do(); undoStack.push(cmd); redoStack.length = 0; onChange(); },
     undo() { const c = undoStack.pop(); if (!c) return false; c.undo(); redoStack.push(c); onChange(); return true; },
     redo() { const c = redoStack.pop(); if (!c) return false; c.do(); undoStack.push(c); onChange(); return true; },
+    reset() { undoStack.length = 0; redoStack.length = 0; onChange(); },
     get canUndo() { return undoStack.length > 0; },
     get canRedo() { return redoStack.length > 0; },
   };

@@ -313,5 +313,19 @@ addEventListener('keyup', e => {
   if (e.key === ' ') { st.space = false; setTool(st.tool); }
 });
 
+/** Forget the current image (window is hidden but kept warm): frees the bitmap and canvases. */
+function reset() {
+  endText(false); cancelCrop(); hideLoupe();
+  st.selected = null; st.live = null; st.pointer = null;
+  history.reset();
+  st.bitmap?.close?.(); st.bitmap = null;
+  for (const c of [$('base'), $('scene')]) { c.width = 1; c.height = 1; }
+  st.doc = null; ui.setInfo('');
+}
+
+// Rust calls these on a warm (hidden) window: __open loads the new image, __reset releases it.
+window.__open = () => { reset(); return load().catch(err => ui.flash(String(err), true)); };
+window.__reset = reset;
+
 // Frameless window: the toolbar is the drag handle; the page loads its own image.
 load().catch(err => ui.flash(String(err), true));
