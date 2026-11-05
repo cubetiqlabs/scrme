@@ -1,6 +1,7 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Preferences</title>
-<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="stylesheet" href="shared/mascot.css">
 <style>
 :root{--hi:#ffffff12}@media (prefers-color-scheme:light){:root{--hi:#ffffffd0}}
 html,body{height:100%;background:transparent;overflow:hidden}
@@ -9,12 +10,8 @@ body{color:var(--fg);font-size:13px;user-select:none;-webkit-user-select:none;cu
 main{flex:1;overflow-y:auto;padding:0 20px 20px;scrollbar-width:thin}
 main::-webkit-scrollbar{width:8px}main::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 header{flex:none;position:relative;display:flex;align-items:center;gap:14px;margin-bottom:6px;padding:18px 20px 18px 18px;color:#fff;overflow:hidden;isolation:isolate;
-  background:linear-gradient(135deg,#ff8ad4 0%,#b57bf0 52%,#7c5cff 100%)}
-/* liquid-glass cover: static aurora blobs (no animated blur = no idle GPU cost), frosted sheen, specular rim */
-header .blob{position:absolute;z-index:-1;border-radius:50%;filter:blur(22px);opacity:.75;pointer-events:none}
-header .b1{width:120px;height:120px;left:-30px;top:-50px;background:#ffd2ee}
-header .b2{width:130px;height:130px;right:40px;top:-60px;background:#8fd0ff;opacity:.55}
-header .b3{width:150px;height:110px;right:-40px;bottom:-60px;background:#5b3df5}
+  background:radial-gradient(130px 120px at 4% -8%,#ffd2eecc,#ffd2ee00 70%),radial-gradient(150px 130px at 58% -22%,#8fd0ff99,#8fd0ff00 70%),radial-gradient(170px 120px at 104% 112%,#5b3df5,#5b3df500 72%),linear-gradient(135deg,#ff8ad4 0%,#b57bf0 52%,#7c5cff 100%)}
+/* liquid-glass cover: soft aurora from plain gradients (no filter: blur, no offscreen layers), frosted sheen, specular rim */
 header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:linear-gradient(180deg,#ffffff4d 0%,#ffffff14 42%,#ffffff00 60%),radial-gradient(120% 90% at 20% 0%,#ffffff40,transparent 60%)}
 header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,#ffffff00,#ffffff99,#ffffff00);pointer-events:none}
@@ -23,13 +20,13 @@ header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;ba
   -webkit-backdrop-filter:blur(18px) saturate(1.8);backdrop-filter:blur(18px) saturate(1.8);
   box-shadow:inset 0 1.5px 0 #ffffffd0,inset 0 -1px 0 #3b2a6b26,inset 0 0 0 .75px #ffffff80,0 8px 20px #3b2a6b40,0 2px 4px #3b2a6b26}
 .logo::after{content:"";position:absolute;left:9px;right:22px;top:4px;height:9px;border-radius:9px;background:linear-gradient(180deg,#ffffffb0,#ffffff00);pointer-events:none}
-header>*{pointer-events:none}header>.x{pointer-events:auto}
+header>*{pointer-events:none}header>.x,header>.logo{pointer-events:auto}
 .x{position:absolute;top:14px;right:14px;width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:50%;padding:0;color:#fff;cursor:pointer;
   background:linear-gradient(160deg,#ffffff6e,#ffffff24 55%,#ffffff38);
   -webkit-backdrop-filter:blur(14px) saturate(1.7);backdrop-filter:blur(14px) saturate(1.7);
   box-shadow:inset 0 1px 0 #ffffffb0,inset 0 -1px 0 #3b2a6b22,inset 0 0 0 .5px #ffffff66,0 3px 10px #3b2a6b30;
   transition:transform .22s cubic-bezier(.2,.9,.3,1.2),background .2s,box-shadow .2s}
-.x svg{width:9px;height:9px;filter:drop-shadow(0 1px 1px #3b2a6b40)}
+.x svg{width:9px;height:9px}
 .x:hover{background:linear-gradient(160deg,#ffffff93,#ffffff3d 55%,#ffffff55);transform:scale(1.08);
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 #3b2a6b22,inset 0 0 0 .5px #ffffff88,0 5px 14px #3b2a6b3d}
 .x:active{transform:scale(.93);transition-duration:.08s}
@@ -40,28 +37,10 @@ header>*{pointer-events:none}header>.x{pointer-events:auto}
 .about a:hover,.credit a:hover{text-decoration:underline}
 .credit{margin:10px 4px 0;text-align:center;color:var(--mut);font-size:12px}
 .credit i{color:#ff6f9c;font-style:normal}
-header .mascot{width:42px;height:42px;overflow:visible}
-/* cutest idle loop: float, hop every few seconds, blink, blush pulse, twinkling sparkles. transform/opacity only. */
-.bob{display:grid;animation:bob 3.2s ease-in-out infinite}
-.hop{display:grid;transform-origin:50% 100%;animation:hop 7s cubic-bezier(.3,.7,.4,1) infinite}
-.eyes{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
-.cheek{transform-box:fill-box;transform-origin:center;animation:blush 3.2s ease-in-out infinite}
-.mouth{transform-box:fill-box;transform-origin:50% 0;animation:smile 7s infinite}
-.sp{position:absolute;color:#fff;line-height:1;opacity:0;text-shadow:0 0 6px #fff9;pointer-events:none}
-.sp.s1{font-size:9px;right:-4px;top:-3px;animation:twinkle 3.6s 0s infinite}
-.sp.s2{font-size:7px;left:-5px;bottom:6px;animation:twinkle 3.6s 1.8s infinite}
-@keyframes bob{50%{transform:translateY(-2px)}}
-@keyframes hop{0%,82%,100%{transform:none}86%{transform:scale(1.08,.88)}91%{transform:translateY(-7px) scale(.94,1.08)}96%{transform:scale(1.06,.92)}98%{transform:scale(.99,1.01)}}
-@keyframes blink{0%,92%,100%{transform:none}96%{transform:scaleY(.08)}}
-@keyframes blush{50%{opacity:.55;transform:scale(1.15)}}
-@keyframes smile{0%,84%,100%{transform:none}90%,96%{transform:scale(1.25,1.2)}}
-@keyframes twinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}25%{opacity:1;transform:scale(1.15) rotate(35deg)}55%{opacity:0;transform:scale(.5) rotate(80deg)}}
-body.still *{animation-play-state:paused!important}
-@media (prefers-reduced-motion:reduce){.bob,.hop,.eyes,.cheek,.mouth,.sp{animation:none}}
 header h1{margin:0;font:800 19px var(--font);letter-spacing:-.2px}
 header p{margin:2px 0 0;opacity:.85;font-size:12px}
 h2{margin:14px 4px 6px;font:700 11px var(--font);letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px;box-shadow:inset 0 1px 0 var(--hi)}
+.card{contain:layout paint;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px;box-shadow:inset 0 1px 0 var(--hi)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px}
 .row+.row{border-top:1px solid var(--line)}
 .row small{display:block;color:var(--mut);font-size:11.5px;margin-top:1px}
@@ -83,7 +62,7 @@ h2{margin:14px 4px 6px;font:700 11px var(--font);letter-spacing:.8px;text-transf
 .sw:checked{background:var(--grad)}
 .sw:checked::after{transform:translateX(16px)}
 #msg{position:fixed;left:50%;bottom:14px;transform:translate(-50%,8px);padding:5px 13px;border-radius:999px;font:600 12px var(--font);
-  background:color-mix(in srgb,var(--card) 80%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  background:var(--card);
   border:1px solid var(--line);box-shadow:0 4px 14px #0003,inset 0 1px 0 var(--hi);pointer-events:none;opacity:0;transition:opacity .2s,transform .2s}
 h2.split{display:flex;align-items:center;justify-content:space-between}
 h2.split button.link{text-transform:none;letter-spacing:0;font-size:11.5px;padding:2px 6px;margin:-2px 0}
@@ -109,14 +88,7 @@ button.link:hover{background:var(--chip)}
 <body>
 <div id="app">
 <header data-tauri-drag-region>
-  <i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i>
-  <div class="logo"><div class="bob"><div class="hop">
-    <svg class="mascot" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#fff4fb"/>
-      <g class="eyes"><ellipse cx="14" cy="18" rx="2.4" ry="3.3" fill="#3b2a6b"/><ellipse cx="26" cy="18" rx="2.4" ry="3.3" fill="#3b2a6b"/>
-      <circle cx="14.8" cy="16.8" r=".9" fill="#fff"/><circle cx="26.8" cy="16.8" r=".9" fill="#fff"/></g>
-      <g class="cheek"><ellipse cx="9.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/><ellipse cx="30.5" cy="24.5" rx="3.4" ry="2.1" fill="#ffa3c4"/></g>
-      <path class="mouth" d="M15.5 24.5q4.5 5 9 0" fill="none" stroke="#3b2a6b" stroke-width="2.4" stroke-linecap="round"/></svg>
-  </div></div><i class="sp s1">✦</i><i class="sp s2">✦</i></div>
+  <div class="logo" id="logo" role="img" aria-label="scrme mascot"></div>
   <div><h1>scrme</h1><p id="ver">Preferences</p></div>
   <button class="x" id="close" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>
 </header>
@@ -150,4 +122,5 @@ button.link:hover{background:var(--chip)}
 </main>
 </div>
 <script src="settings.js"></script>
+<script type="module">import { mountMascot } from "./shared/mascot.js"; mountMascot(document.getElementById("logo"));</script>
 </body></html>
