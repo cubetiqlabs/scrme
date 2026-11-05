@@ -115,6 +115,31 @@ pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), 
     Ok(())
 }
 
+/// Float the edited screenshot above everything (native window; macOS only for now).
+#[tauri::command]
+pub(crate) fn pin_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+    let img = rgba_from(&req).ok_or("bad image")?;
+    #[cfg(target_os = "macos")]
+    {
+        let (w, h) = img.dimensions();
+        let tiff = crate::tiff::rgb_tiff(&img);
+        drop(img);
+        app.run_on_main_thread(move || {
+            if let Some(mtm) = objc2::MainThreadMarker::new() {
+                crate::platform::pin_macos::show(mtm, tiff, (w, h));
+            }
+        })
+        .map_err(|e| e.to_string())?;
+        trim_memory();
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, img);
+        Err("Pin to screen is only available on macOS for now".into())
+    }
+}
+
 /// Plain text to the clipboard (e.g. the eyedropper's hex).
 #[tauri::command]
 pub(crate) fn copy_text(app: AppHandle, text: String) -> Result<(), String> {

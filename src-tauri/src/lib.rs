@@ -60,6 +60,7 @@ pub fn run() {
             commands::copy_rgba,
             commands::save_rgba,
             commands::copy_text,
+            commands::pin_rgba,
             commands::close_editor,
             commands::get_config,
             commands::set_config,

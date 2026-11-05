@@ -70,6 +70,10 @@ Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): 
 
 `src/editor.html` + `src/editor/` (ES modules, no bundler). Pure, unit-tested core: `geom.js`, `doc.js` (document + command history). `shapes.js` is the shape registry (draw/hit/bounds/translate per type) and `tools.js` the tool registry: **adding a tool = one entry in `tools.js` (+ a shape in `shapes.js` if it draws something new + an icon in `icons.js`)**. `render.js` paints the base image once and redraws objects on a second canvas via rAF; `export.js` flattens at 1:1 pixels and sends raw RGBA to Rust (`copy_rgba`/`save_rgba`). The window is frameless (toolbar = drag region, needs `capabilities/settings.json`), the page loads its own image (`edit_size` then `edit_bytes`, which hands the buffer over), and Rust destroys the window on close. Tools: select, pen, arrow, line, rectangle, ellipse, highlighter, text, numbered marker, blur, ruler (M), color picker (I: loupe, click picks, Tab copies the hex via `copy_text`), crop (C: drag, Enter applies as an undoable command, Esc cancels). Run the tests with `node --test src/editor/editor.test.js`.
 
+## Pin to screen
+
+`platform/pin_macos.rs`: borderless always-on-top `NSWindow` + `NSImageView` (no webview): drag to move, scroll/pinch to resize (aspect kept), Esc / double-click / right-click closes. Closed pins are parked, not freed inside their own event handler. Editor button/⌘P sends the flattened image via the `pin_rgba` command (TIFF built by `tiff.rs`). macOS only; other OSes return an error toast.
+
 ## Mascot
 
 `src/shared/mascot.js` builds the logo (idle loop in `mascot.css`) and a click easter egg: `shared/combo.js` (pure, unit-tested with `node --test src/shared/combo.test.js`) turns rapid clicks into `poke` / `boop` (3) / `dizzy` (6) / `surprise` (10, with a cooldown). Reaction DOM is built once; animations are transform/opacity only, `will-change` only while reacting, and nothing runs under `prefers-reduced-motion`. Reuse with `mountMascot(el)`.
