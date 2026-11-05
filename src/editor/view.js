@@ -1,18 +1,17 @@
-// Zoom/pan of the stage (both canvases) inside the viewport. "100%" = 1 image pixel per
+// Zoom/pan state for the viewport canvas (the renderer applies it). "100%" = 1 image pixel per
 // device pixel (so a retina capture shows at its point size, like the status chip says).
 
-export function createView(viewport, stage, onChange = () => {}) {
+export function createView(viewport, onChange = () => {}) {
   const dpr = () => window.devicePixelRatio || 1;
   let z = 1, x = 0, y = 0, iw = 1, ih = 1;
   let auto = true; // keep the image fitted until the user zooms or pans
   const scale = () => z / dpr();
-  const apply = () => {
-    stage.style.transform = `translate(${x}px, ${y}px) scale(${scale()})`;
-    onChange(z);
-  };
+  const apply = () => onChange(z);
 
   const view = {
     get zoom() { return z; },
+    get x() { return x; },
+    get y() { return y; },
     get scale() { return scale(); },
     setImage(w, h) { iw = w; ih = h; view.fit(); },
     fit(pad = 56) {

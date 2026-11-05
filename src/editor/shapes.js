@@ -136,9 +136,12 @@ export const SHAPES = {
       const cw = Math.max(1, Math.ceil(o.w / f)), ch = Math.max(1, Math.ceil(o.h / f));
       const key = `${o.x}|${o.y}|${o.w}|${o.h}`;
       if (!o._cache || o._cache.key !== key) {
-        const c = new OffscreenCanvas(cw, ch);
-        c.getContext('2d').drawImage(env.base, o.x, o.y, o.w, o.h, 0, 0, cw, ch);
-        o._cache = { key, canvas: c, cw, ch };
+        // reuse the small canvas while the box is moved (only the sampled region changes)
+        const c = o._cache && o._cache.cw === cw && o._cache.ch === ch ? o._cache : { canvas: new OffscreenCanvas(cw, ch), cw, ch };
+        const g = c.canvas.getContext('2d');
+        g.clearRect(0, 0, cw, ch);
+        g.drawImage(env.base, o.x, o.y, o.w, o.h, 0, 0, cw, ch);
+        c.key = key; o._cache = c;
       }
       ctx.save(); ctx.imageSmoothingEnabled = false;
       ctx.drawImage(o._cache.canvas, 0, 0, o._cache.cw, o._cache.ch, o.x, o.y, o.w, o.h);
