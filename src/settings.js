@@ -4,11 +4,10 @@ const $ = id => document.getElementById(id);
 // Same glyphs as the tray menu, inlined (purple strokes) so Preferences matches it.
 const ICONS = {
   area: '<path d="M3 9V4.5A1.5 1.5 0 0 1 4.5 3H9M15 3h4.5A1.5 1.5 0 0 1 21 4.5V9M21 15v4.5a1.5 1.5 0 0 1-1.5 1.5H15M9 21H4.5A1.5 1.5 0 0 1 3 19.5V15"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>',
-  edit: '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/><path d="M14 7l3 3"/>',
   full: '<rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M12 16v4M8 20h8"/>',
   window: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18"/>',
 };
-const FIELDS = [['area', 'Capture area'], ['edit', 'Capture & annotate'], ['full', 'Capture screen'], ['window', 'Capture window']];
+const FIELDS = [['area', 'Capture area'], ['full', 'Capture screen'], ['window', 'Capture window']];
 let cfg = {}, recording = null, timer;
 
 const SYM = { Cmd: '⌘', Super: '⌘', Shift: '⇧', Alt: '⌥', Option: '⌥', Ctrl: '⌃', Control: '⌃' };

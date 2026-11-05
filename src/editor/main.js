@@ -139,7 +139,9 @@ vp.addEventListener('pointerdown', e => {
     }
     return;
   }
-  if (tool.text) { openText(p); e.preventDefault(); return; }
+  // Text opens on pointer-UP: WebKit moves focus on the mouse-down that follows this event, which
+  // used to steal it straight back from the new textarea (so nothing could be typed).
+  if (tool.text) { st.pointer = { kind: 'text', p }; capture(e); return; }
   if (tool.picker) { pickColor(p); return; }
   if (tool.crop) { st.crop = { ...p, w: 0, h: 0, _a: p }; st.pointer = { kind: 'crop' }; ui.setHint(null); capture(e); renderer.invalidate(); return; }
   const o = tool.start(p, { ...toolCtx(), size: sizeFor(tool.id) });
@@ -167,6 +169,7 @@ vp.addEventListener('pointermove', e => {
 vp.addEventListener('pointerup', e => {
   const ptr = st.pointer; st.pointer = null;
   if (!ptr) return;
+  if (ptr.kind === 'text') { openText(ptr.p); return; }
   if (ptr.kind === 'crop') {
     if (st.crop.w > 4 && st.crop.h > 4) ui.setHint('↵ Enter to crop · Esc to cancel');
     else cancelCrop();
@@ -277,8 +280,15 @@ function openText(p, existing = null) {
     if (ev.key === 'Escape') { endText(false); }
     else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); endText(true); }
   });
-  ta.addEventListener('blur', () => endText(true));
-  vp.append(ta); place(); ta.focus();
+  const focus = () => ta.focus({ preventScroll: true });
+  const born = performance.now();
+  // A blur right after creation is the page fighting for focus, not the user leaving: take it back.
+  ta.addEventListener('blur', () => {
+    if (editor && performance.now() - born < 300) setTimeout(focus, 0);
+    else endText(true);
+  });
+  vp.append(ta); place(); focus();
+  requestAnimationFrame(focus); setTimeout(focus, 80);
   editor = { ta, at, obj: o, size };
   if (o) { o.hidden = true; renderer.invalidate(); }
 }

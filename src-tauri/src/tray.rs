@@ -38,6 +38,7 @@ pub(crate) fn build(app: &App) -> tauri::Result<()> {
     let area = item(Action::Area, "⛶  Capture Area", Some(&cfg.area))?;
     let full = item(Action::Screen, "▭  Capture Screen", Some(&cfg.full))?;
     let window = item(Action::Window, "❏  Capture Window", Some(&cfg.window))?;
+    let last = item(Action::Last, "⟲  Last Capture", None)?;
     let upd = item(Action::Update, "↻  Check for Updates…", None)?;
     let prefs = item(Action::Prefs, "⚙︎  Preferences…", Some("Cmd+,"))?;
     let quit = item(Action::Quit, "⏻  Quit scrme", Some("Cmd+Q"))?;
@@ -53,6 +54,7 @@ pub(crate) fn build(app: &App) -> tauri::Result<()> {
             &area,
             &full,
             &window,
+            &last,
             &PredefinedMenuItem::separator(app)?,
             &upd,
             &prefs,

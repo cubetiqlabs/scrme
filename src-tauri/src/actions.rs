@@ -14,9 +14,9 @@ use crate::windows::open_settings;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Area,
-    Edit,
     Screen,
     Window,
+    Last,
     Prefs,
     Update,
     Quit,
@@ -25,9 +25,9 @@ pub(crate) enum Action {
 /// One table = tray item id = CLI flag (`--<name>`).
 const NAMES: [(Action, &str); 7] = [
     (Action::Area, "area"),
-    (Action::Edit, "edit"),
     (Action::Screen, "screen"),
     (Action::Window, "window"),
+    (Action::Last, "last"),
     (Action::Prefs, "prefs"),
     (Action::Update, "update"),
     (Action::Quit, "quit"),
@@ -52,7 +52,6 @@ impl Action {
     pub(crate) fn from_shortcut(keys: &Keys, sc: &Shortcut) -> Option<Self> {
         [
             (Action::Area, keys.area),
-            (Action::Edit, keys.edit),
             (Action::Screen, keys.full),
             (Action::Window, keys.window),
         ]
@@ -66,10 +65,9 @@ impl Action {
 pub(crate) fn dispatch(app: &AppHandle, action: Action) {
     let app = app.clone();
     match action {
-        Action::Area | Action::Edit | Action::Screen | Action::Window => {
+        Action::Area | Action::Screen | Action::Window => {
             std::thread::spawn(move || match action {
-                Action::Area => start_area_capture(&app, false),
-                Action::Edit => start_area_capture(&app, true),
+                Action::Area => start_area_capture(&app),
                 Action::Screen => capture_full(&app),
                 _ => capture_window(&app),
             });
@@ -79,6 +77,15 @@ pub(crate) fn dispatch(app: &AppHandle, action: Action) {
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(60));
                 open_settings(&app);
+            });
+        }
+        // Reopen the newest capture (kept on disk) in the editor.
+        Action::Last => {
+            std::thread::spawn(move || {
+                match crate::store::latest_path(&app).and_then(|p| crate::store::load(&p)) {
+                    Some(img) => crate::commands::open_editor_with(&app, img),
+                    None => crate::toast::show_toast_err(&app, "No capture yet"),
+                }
             });
         }
         Action::Update => {

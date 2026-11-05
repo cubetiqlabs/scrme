@@ -36,12 +36,6 @@ pub(crate) fn commit_selection(
     edit: bool,
 ) {
     let t = Instant::now();
-    // "Capture & annotate" opens the editor regardless of ⇧; always clear the flag.
-    let edit = app
-        .state::<EditMode>()
-        .0
-        .swap(false, std::sync::atomic::Ordering::SeqCst)
-        || edit;
     let Some(frame) = state.0.lock().unwrap().take() else {
         return;
     };
@@ -64,9 +58,6 @@ pub(crate) fn commit_selection(
 
 #[tauri::command]
 pub(crate) fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
-    app.state::<EditMode>()
-        .0
-        .store(false, std::sync::atomic::Ordering::SeqCst);
     state.0.lock().unwrap().take();
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
@@ -115,7 +106,7 @@ pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), 
     Ok(())
 }
 
-/// Put an image in the editor (the preview's Edit button, ⇧-release, "capture & annotate").
+/// Put an image in the editor (the preview's Edit button, ⇧-release).
 pub(crate) fn open_editor_with(app: &AppHandle, img: RgbaImage) {
     let (w, h) = img.dimensions();
     *app.state::<Pending>().0.lock().unwrap() = Some(img);

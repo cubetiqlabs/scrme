@@ -50,7 +50,7 @@ Always use the **latest major version** of every action (e.g. `actions/checkout@
 
 ## CLI / automation
 
-A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --edit | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
+A second launch is forwarded to the running instance (`tauri-plugin-single-instance`): `scrme --area | --screen | --window | --prefs | --update | --quit`. All entry points (hotkeys, tray, CLI) go through `actions::dispatch`; add a new action in `actions.rs` once and it is reachable from all three.
 
 ## Native overlay + toast (macOS)
 
@@ -69,6 +69,10 @@ Measured on the release build (macOS arm64, idle, tray + hidden overlay/toast): 
 ## Editor
 
 `src/editor.html` + `src/editor/` (ES modules, no bundler). Pure, unit-tested core: `geom.js`, `doc.js` (document + command history). `shapes.js` is the shape registry (draw/hit/bounds/translate per type) and `tools.js` the tool registry: **adding a tool = one entry in `tools.js` (+ a shape in `shapes.js` if it draws something new + an icon in `icons.js`)**. `render.js` draws everything on ONE viewport-sized canvas (image as an ImageBitmap + annotations through a zoom/pan transform, at most once per rAF), so memory and frame cost follow the window, not the image (two image-sized canvases plus a CSS-scaled stage cost 500+ MB and stuttered on a retina full-screen capture); The canvas is `doc.canvasRect` (image plus any annotations dragged outside it, white fill); the view refits when it changes and `export.js` flattens that whole rect at 1:1 pixels and sends raw RGBA to Rust (`copy_rgba`/`save_rgba`). The window is frameless (toolbar = drag region, needs `capabilities/settings.json`), the page loads its own image (`edit_size` then `edit_bytes`, which hands the buffer over), and Rust destroys the window on close. Tools: select, pen, arrow, line, rectangle, ellipse, highlighter, text, numbered marker, blur, ruler (M), color picker (I: loupe, click picks, Tab copies the hex via `copy_text`), crop (C: drag, Enter applies as an undoable command, Esc cancels). Run the tests with `node --test src/editor/editor.test.js`.
+
+## Latest capture on disk, drag-out
+
+Every capture is also written as a PNG to `~/Library/Caches/<id>/captures/` (`store.rs`, fast encode; only the newest file is kept) and the full image is dropped from memory. The preview holds just a thumbnail; its Edit / Copy / Save as (a file copy) / drag-out read that file, and the tray's **Last Capture** (`scrme --last`) reopens it in the editor even after the preview closed and the clipboard changed. `finish()` holds `Latest`'s mutex until the file exists so buttons never see the previous capture. Dragging the preview out of the window starts a native file drag (`NSDraggingItem` with the PNG's file URL); previews are dragged out, pins (editor Pin) still move by dragging.
 
 ## Pin to screen
 

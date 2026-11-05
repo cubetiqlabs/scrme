@@ -3829,6 +3829,7 @@ version = "0.1.4"
 dependencies = [
  "block2",
  "image",
+ "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",

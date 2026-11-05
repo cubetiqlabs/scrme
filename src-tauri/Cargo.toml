@@ -34,6 +34,7 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 tauri-plugin-updater = "2.14.1"
 tauri-plugin-single-instance = "2.5.5"
 block2 = "0.6"
+libc = "0.2"
 
 
 # Native AppKit glue (app activation now; overlay/toast/pin later). Already in the tree via tao/muda.
