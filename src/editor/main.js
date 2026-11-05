@@ -277,8 +277,9 @@ function openText(p, existing = null) {
   ta.addEventListener('input', place);
   ta.addEventListener('keydown', ev => {
     ev.stopPropagation();
-    if (ev.key === 'Escape') { endText(false); }
-    else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); endText(true); }
+    // Enter adds a line (as in any text box); ⌘↵ / Ctrl+↵, Esc or clicking away finishes.
+    if (ev.key === 'Escape') { ev.preventDefault(); endText(true); }
+    else if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey) && !ev.isComposing) { ev.preventDefault(); endText(true); }
   });
   const focus = () => ta.focus({ preventScroll: true });
   const born = performance.now();
@@ -287,6 +288,7 @@ function openText(p, existing = null) {
     if (editor && performance.now() - born < 300) setTimeout(focus, 0);
     else endText(true);
   });
+  ui.setHint('↵ new line · ⌘↵ or Esc when done');
   vp.append(ta); place(); focus();
   requestAnimationFrame(focus); setTimeout(focus, 80);
   editor = { ta, at, obj: o, size };
@@ -296,6 +298,7 @@ function openText(p, existing = null) {
 function endText(commit) {
   if (!editor) return;
   const { ta, at, obj, size } = editor; editor = null;
+  ui.setHint(null);
   const text = ta.value.replace(/\s+$/, '');
   ta.remove();
   if (obj) {

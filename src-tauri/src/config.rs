@@ -16,6 +16,8 @@ pub(crate) struct Config {
     pub(crate) animation: bool,
     /// Check for updates on launch and every few hours; download in the background.
     pub(crate) auto_update: bool,
+    /// Start scrme (in the menu bar) when you log in.
+    pub(crate) launch_at_login: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -26,6 +28,7 @@ impl Default for Config {
             autosave: false,
             animation: true,
             auto_update: true,
+            launch_at_login: false,
         }
     }
 }
@@ -82,6 +85,18 @@ pub(crate) fn write_config(app: &AppHandle, cfg: &Config) -> std::io::Result<()>
 }
 
 /// Load config, register the global hotkeys and publish `Settings` as app state.
+/// Make the login item match the setting (a LaunchAgent on macOS). Cheap no-op when it already does.
+pub(crate) fn apply_autostart(app: &AppHandle, want: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let is_on = launcher.is_enabled().map_err(|e| e.to_string())?;
+    match (want, is_on) {
+        (true, false) => launcher.enable().map_err(|e| e.to_string()),
+        (false, true) => launcher.disable().map_err(|e| e.to_string()),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn init(app: &tauri::App) {
     let handle = app.handle();
     let cfg = load_config(handle);
@@ -94,6 +109,9 @@ pub(crate) fn init(app: &tauri::App) {
         if let Err(e) = gs.register(s) {
             eprintln!("cannot register {s}: {e}");
         }
+    }
+    if let Err(e) = apply_autostart(handle, cfg.launch_at_login) {
+        eprintln!("launch at login: {e}");
     }
     app.manage(Settings {
         cfg: Mutex::new(cfg),

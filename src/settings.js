@@ -25,7 +25,7 @@ function render() {
     b.onclick = () => { recording = k; render(); };
     row.append(l, b); box.append(row);
   }
-  $('animation').checked = cfg.animation; $('autosave').checked = cfg.autosave; $('auto_update').checked = cfg.auto_update;
+  $('animation').checked = cfg.animation; $('autosave').checked = cfg.autosave; $('auto_update').checked = cfg.auto_update; $('launch_at_login').checked = cfg.launch_at_login;
 }
 
 // KeyboardEvent -> tauri accelerator string
@@ -55,7 +55,7 @@ addEventListener('keydown', e => {
   if (a) { const k = recording; recording = null; save({ ...cfg, [k]: a }); }
 });
 addEventListener('mousedown', e => { if (recording && !e.target.closest('.rec')) { recording = null; render(); } });
-for (const id of ['animation', 'autosave', 'auto_update']) $(id).onchange = () => save({ ...cfg, [id]: $(id).checked });
+for (const id of ['animation', 'autosave', 'auto_update', 'launch_at_login']) $(id).onchange = () => save({ ...cfg, [id]: $(id).checked });
 $('reset').onclick = async () => save(await invoke('default_config'));
 
 invoke('get_config').then(c => { cfg = c; render(); });

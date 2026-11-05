@@ -207,6 +207,8 @@ pub(crate) fn set_config(
 ) -> Result<(), String> {
     let new = Keys::parse(&cfg)?;
     let old = *state.keys.lock().unwrap();
+    let was_login = state.cfg.lock().unwrap().launch_at_login;
+    apply_autostart(&app, cfg.launch_at_login)?;
     let gs = app.global_shortcut();
     let register = |k: Keys| -> Result<(), String> {
         gs.unregister_all().map_err(|e| e.to_string())?;
@@ -217,6 +219,7 @@ pub(crate) fn set_config(
     };
     if let Err(e) = register(new) {
         let _ = register(old);
+        let _ = apply_autostart(&app, was_login);
         return Err(e);
     }
     *state.keys.lock().unwrap() = new;
