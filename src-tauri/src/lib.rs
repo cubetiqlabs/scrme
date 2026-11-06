@@ -103,8 +103,20 @@ pub fn run() {
             handle_args(app.handle(), std::env::args().skip(1));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // scrme lives in the menu bar; destroying a webview window (the parked editor after
+            // EDITOR_KEEP_SECS, or Preferences) must not quit the app. Tauri requests an exit
+            // with `code: None` when the last window is destroyed. Explicit quits and updater
+            // restarts arrive with `code: Some(_)`, so let those through.
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = event
+            {
+                api.prevent_exit();
+            }
+        });
 }
 
 #[cfg(test)]
