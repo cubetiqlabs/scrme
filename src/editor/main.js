@@ -31,7 +31,10 @@ const capture = e => { try { vp.setPointerCapture(e.pointerId); } catch { /* syn
 const canvas = () => canvasRect(st.doc, o => SHAPES[o.type].bounds(o));
 
 let lastRect = '';
+// Sequence of document changes vs. the last state sent to Rust, so close only saves real edits.
+let changeSeq = 0, savedSeq = 0;
 const history = createHistory(() => {
+  changeSeq++;
   ui.setHistory(history.canUndo, history.canRedo);
   updateInfo();
   // The canvas grows when annotations leave the image (and shrinks back on undo): keep it in view.
@@ -54,7 +57,7 @@ const ui = createUI({
     if (st.selected && 'size' in st.selected) history.run(patchCmd(st.selected, { size: sizeFor(st.selected.type) }));
   },
   onUndo: () => undo(), onRedo: () => redo(), onCopy: () => send('copy_rgba', 'Copied'), onSave: () => send('save_rgba', 'Saved'), onPin: () => send('pin_rgba', 'Pinned'),
-  onClose: () => invoke('close_editor'),
+  onClose: () => closeEditor(),
 });
 
 function updateInfo() {
@@ -105,16 +108,37 @@ function setImage(bitmap) {
 async function send(cmd, done) {
   endText(true);
   if (!st.doc) return;
+  const sentSeq = changeSeq;
   const wasSelected = st.selected; st.selected = null;
   try {
     const rect = canvas();
     const rgba = flatten(st.doc, st.bitmap, unit(), rect);
     const res = await invoke(cmd, rgba, { headers: { w: String(rect.w), h: String(rect.h) } });
+    savedSeq = sentSeq; // Rust stored this exact image as the latest capture
     ui.flash(cmd === 'save_rgba' && typeof res === 'string' ? 'Saved ✓' : `${done} ✓`);
   } catch (e) {
     ui.flash(String(e), true);
   }
   st.selected = wasSelected; renderer.invalidate();
+}
+
+/** Close the editor, first persisting unsaved edits as the latest capture. */
+async function closeEditor() {
+  endText(true);
+  if (st.doc && changeSeq !== savedSeq) {
+    const seq = changeSeq;
+    const wasSelected = st.selected; st.selected = null;
+    try {
+      const rect = canvas();
+      const rgba = flatten(st.doc, st.bitmap, unit(), rect);
+      await invoke('commit_editor', rgba, { headers: { w: String(rect.w), h: String(rect.h) } });
+      savedSeq = seq;
+    } catch {
+      // A failed save must never keep the window open: Rust parks/destroys it anyway.
+    }
+    st.selected = wasSelected;
+  }
+  try { await invoke('close_editor'); } catch { /* already closing */ }
 }
 
 // ── pointer input ───────────────────────────────────────────────────────
@@ -328,7 +352,7 @@ addEventListener('keydown', e => {
   if (e.key === 'Tab' && st.tool === 'picker') { e.preventDefault(); copyHex(); return; }
   if (e.key === 'Enter' && st.crop) { e.preventDefault(); applyCrop(); return; }
   if (e.key === ' ') { st.space = true; vp.style.cursor = 'grab'; e.preventDefault(); return; }
-  if (e.key === 'Escape') { if (st.crop) cancelCrop(); else if (st.selected) select(null); else invoke('close_editor'); return; }
+  if (e.key === 'Escape') { if (st.crop) cancelCrop(); else if (st.selected) select(null); else closeEditor(); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && st.selected) {
     e.preventDefault(); history.run(removeCmd(st.doc, st.selected)); select(null); return;
   }
@@ -352,6 +376,7 @@ function reset() {
   endText(false); cancelCrop(); hideLoupe();
   st.selected = null; st.live = null; st.pointer = null;
   history.reset();
+  changeSeq = 0; savedSeq = 0; // history.reset() counted as a change; a fresh image starts clean
   st.bitmap?.close?.(); st.bitmap = null;
   renderer.invalidate();
   st.doc = null; ui.setInfo('');

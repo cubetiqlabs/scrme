@@ -56,6 +56,21 @@ pub(crate) fn write_png(
     Some(path)
 }
 
+/// Write `img` as the new latest capture and record it in `slot`. Callers hold the lock.
+pub(crate) fn put(app: &AppHandle, img: &RgbaImage, slot: &mut Option<PathBuf>) -> Option<PathBuf> {
+    let path = write_png(app, img, slot.take())?;
+    *slot = Some(path.clone());
+    Some(path)
+}
+
+/// Make `img` the newest capture, replacing the previous file. The lock is held while the
+/// PNG is written so `latest_path` never returns the old capture in between.
+pub(crate) fn replace_latest(app: &AppHandle, img: &RgbaImage) -> Option<PathBuf> {
+    let latest = app.state::<Latest>();
+    let mut slot = latest.0.lock().unwrap();
+    put(app, img, &mut slot)
+}
+
 /// Fast PNG encode into `tmp`, then an atomic rename to `path`.
 fn encode(img: &RgbaImage, path: &Path, tmp: &Path) -> Option<()> {
     let file = std::fs::File::create(tmp).ok()?;
