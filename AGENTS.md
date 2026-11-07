@@ -104,7 +104,44 @@ Logic lives in the "updates" section of `lib.rs` (`run_update`).
 
 ## macOS signing
 
-Release builds are **ad-hoc signed** (`bundle.macOS.signingIdentity: "-"`), not notarized. Without any signature, a quarantined download shows "scrme is damaged". Ad-hoc signing changes the code identity on every build, so macOS may re-ask for Screen Recording after an update; real fix is an Apple Developer ID + notarization (set `APPLE_*` secrets in release.yml). DMG layout/background: `src-tauri/dmg/background.png`, rendered from `design/dmg/background.html` (headless Chrome, 2x, 144 dpi).
+Release builds are signed with a **stable self-signed code-signing certificate**, not notarized.
+TCC (Screen Recording) binds a grant to the app's code identity: an ad-hoc signature
+(`signingIdentity: "-"`, the local fallback) changes cdhash on every build, so macOS re-prompts
+after each update even when the toggle still looks enabled. The self-signed certificate gives a
+stable `identifier + certificate root` requirement across releases.
+
+`release.yml` imports the certificate from these repository secrets into a temporary keychain and
+patches `bundle.macOS.signingIdentity` before building:
+
+- `MACOS_SIGNING_CERTIFICATE` — base64 of the `.p12` (certificate + private key)
+- `MACOS_SIGNING_CERTIFICATE_PASSWORD` — the `.p12` password
+- `MACOS_SIGNING_IDENTITY` — certificate CN (`scrme Stable Signing`)
+
+Without the certificate the workflow warns and builds ad-hoc. Never commit the `.p12` or its
+password; keep a backup, but losing it only costs one re-grant (a new certificate is a new
+identity). The first stable-signed release after an ad-hoc one also needs one re-grant. A Developer
+ID + notarization remains the ideal upgrade (also removes Gatekeeper warnings): swap the secret for
+an Apple certificate and add the `APPLE_*` notarization variables.
+
+To recreate the certificate (same CN, then update the three secrets):
+
+```sh
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes \
+  -subj "/CN=scrme Stable Signing/O=scrme/OU=SCRME/C=KH" \
+  -addext "basicConstraints=critical,CA:false" \
+  -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning"
+openssl rand -hex 24 > p12-password.txt
+# macOS `security import` needs the legacy PKCS#12 algorithms.
+openssl pkcs12 -export -inkey key.pem -in cert.pem -out scrme-signing.p12 \
+  -passout file:p12-password.txt -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
+base64 -i scrme-signing.p12 | gh secret set MACOS_SIGNING_CERTIFICATE
+gh secret set MACOS_SIGNING_CERTIFICATE_PASSWORD < p12-password.txt
+printf %s "scrme Stable Signing" | gh secret set MACOS_SIGNING_IDENTITY
+```
+
+DMG layout/background: `src-tauri/dmg/background.png`, rendered from
+`design/dmg/background.html` (headless Chrome, 2x, 144 dpi).
 
 ## Releasing
 
