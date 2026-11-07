@@ -102,6 +102,7 @@ pub(crate) fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
 pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
     copy_image(&app, &img);
+    crate::store::replace_latest(&app, &img);
     trim_memory();
     Ok(())
 }
@@ -117,6 +118,7 @@ pub(crate) fn open_editor_with(app: &AppHandle, img: RgbaImage) {
 #[tauri::command]
 pub(crate) fn pin_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
+    crate::store::replace_latest(&app, &img);
     crate::preview::show_pin(&app, img)
 }
 
@@ -127,8 +129,20 @@ pub(crate) fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn save_rgba(req: tauri::ipc::Request) -> Result<String, String> {
-    save_png(&rgba_from(&req).ok_or("bad image")?)
+pub(crate) fn save_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<String, String> {
+    let img = rgba_from(&req).ok_or("bad image")?;
+    let path = save_png(&img)?;
+    crate::store::replace_latest(&app, &img);
+    Ok(path)
+}
+
+/// Persist the editor's current canvas as the latest capture (called when closing it).
+#[tauri::command]
+pub(crate) fn commit_editor(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+    let img = rgba_from(&req).ok_or("bad image")?;
+    crate::store::replace_latest(&app, &img);
+    trim_memory();
+    Ok(())
 }
 
 #[tauri::command]

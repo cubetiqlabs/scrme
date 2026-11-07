@@ -76,7 +76,7 @@ pub(crate) fn finish(app: &AppHandle, img: RgbaImage) {
         crate::preview::show_preview(app, &img);
     }
     copy_image(app, &img);
-    *slot = crate::store::write_png(app, &img, slot.take());
+    crate::store::put(app, &img, &mut slot);
     if cfg.autosave
         && let Some(path) = slot.as_ref()
         && let Err(e) = autosave_copy(path)
