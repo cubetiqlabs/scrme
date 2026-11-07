@@ -60,6 +60,13 @@ jobs:
     needs: prepare
     if: ${{ !inputs.dry_run }}
     runs-on: macos-latest
+    env:
+      # Stable self-signed code-signing certificate (see "macOS signing" in AGENTS.md).
+      # TCC binds Screen Recording to the code identity; ad-hoc signatures change every
+      # build, so releases of the same app must all be signed with the same certificate.
+      MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+      MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +81,38 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.target }}
+      - name: Install macOS signing certificate
+        if: env.MACOS_SIGNING_CERTIFICATE != ''
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/scrme-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          CERT="$RUNNER_TEMP/scrme-signing.p12"
+
+          printf '%s' "$MACOS_SIGNING_CERTIFICATE" | base64 --decode > "$CERT"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT" -k "$KEYCHAIN" \
+            -P "$MACOS_SIGNING_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/pkgbuild -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Put the temporary keychain first; keep the runner's login keychain in the list.
+          security list-keychain -d user -s "$KEYCHAIN" \
+            "$HOME/Library/Keychains/login.keychain-db"
+          rm -f "$CERT"
+
+          # Tauri signs with this identity from the default keychain.
+          IDENTITY="${MACOS_SIGNING_IDENTITY:-scrme Stable Signing}"
+          security find-certificate -c "$IDENTITY" "$KEYCHAIN" >/dev/null 2>&1
+          echo "Signing macOS bundles with: $IDENTITY"
+          jq --arg id "$IDENTITY" '.bundle.macOS.signingIdentity = $id' \
+            src-tauri/tauri.conf.json > "$RUNNER_TEMP/tauri.conf.json"
+          mv "$RUNNER_TEMP/tauri.conf.json" src-tauri/tauri.conf.json
+      - name: Warn about ad-hoc signing
+        if: env.MACOS_SIGNING_CERTIFICATE == ''
+        run: echo "::warning::No MACOS_SIGNING_CERTIFICATE secret; builds are ad-hoc signed and macOS will re-prompt for Screen Recording after every update."
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,6 +129,16 @@ jobs:
           releaseBody: |
             Install: `curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/scrme/main/install.sh | bash`
             or download the .dmg below.
+            If macOS asks for Screen Recording after this update, enable it once; later updates keep the permission.
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
+      - name: Verify macOS signing
+        if: env.MACOS_SIGNING_CERTIFICATE != ''
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/${{ matrix.target }}/release/bundle/macos/scrme.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "--- designated requirement ---"
+          codesign -d -r- "$APP" 2>&1 | tail -n 1
