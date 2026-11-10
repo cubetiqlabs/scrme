@@ -3,8 +3,9 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Manager};
 
-use crate::actions::{Action, dispatch};
-use crate::config::{Config, Settings};
+use crate::action::Action;
+use crate::actions::dispatch;
+use crate::config::{self, Config};
 use crate::update::UpdateState;
 
 /// Capture items whose native (gray) shortcut hint follows the config.
@@ -31,7 +32,7 @@ pub(crate) fn sync_menu_keys(app: &AppHandle, cfg: &Config) {
 /// recent macOS, so icons are Unicode glyph prefixes; shortcuts are native
 /// accelerators (shown gray) kept in sync by `sync_menu_keys`.
 pub(crate) fn build(app: &App) -> tauri::Result<()> {
-    let cfg = app.state::<Settings>().cfg.lock().unwrap().clone();
+    let cfg = config::current();
     let item = |a: Action, label: &str, key: Option<&str>| {
         MenuItem::with_id(app, a.name(), label, true, key)
     };

@@ -1,54 +1,22 @@
-//! Every user-triggerable action funnels through here: global hotkeys, the tray
-//! menu and CLI flags (`scrme --screen`, handy for scripts and measurements).
+//! Tauri's side of the action table: hotkey → action matching and dispatch.
+//! The actions themselves are named in [`crate::action`], shared with the GPUI engine.
 
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::Shortcut;
 
+use crate::action::Action;
 use crate::capture::{capture_full, capture_window, start_area_capture};
 use crate::config::Keys;
+use crate::host;
+use crate::preview;
+use crate::store;
+use crate::toast;
 use crate::update::{UpdateState, run_update};
 use crate::windows::open_settings;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Action {
-    Area,
-    Screen,
-    Window,
-    Last,
-    Prefs,
-    Update,
-    Quit,
-}
-
-/// One table = tray item id = CLI flag (`--<name>`).
-const NAMES: [(Action, &str); 7] = [
-    (Action::Area, "area"),
-    (Action::Screen, "screen"),
-    (Action::Window, "window"),
-    (Action::Last, "last"),
-    (Action::Prefs, "prefs"),
-    (Action::Update, "update"),
-    (Action::Quit, "quit"),
-];
-
 impl Action {
-    pub(crate) fn name(self) -> &'static str {
-        NAMES
-            .iter()
-            .find(|(a, _)| *a == self)
-            .map_or("", |(_, n)| n)
-    }
-
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        NAMES.iter().find(|(_, n)| *n == name).map(|(a, _)| *a)
-    }
-
-    pub(crate) fn from_flag(flag: &str) -> Option<Self> {
-        Self::from_name(flag.strip_prefix("--")?)
-    }
-
     pub(crate) fn from_shortcut(keys: &Keys, sc: &Shortcut) -> Option<Self> {
         [
             (Action::Area, keys.area),
@@ -67,9 +35,9 @@ pub(crate) fn dispatch(app: &AppHandle, action: Action) {
     match action {
         Action::Area | Action::Screen | Action::Window => {
             std::thread::spawn(move || match action {
-                Action::Area => start_area_capture(&app),
-                Action::Screen => capture_full(&app),
-                _ => capture_window(&app),
+                Action::Area => start_area_capture(),
+                Action::Screen => capture_full(),
+                _ => capture_window(),
             });
         }
         // Let a closing tray menu finish first; it steals activation on its way out.
@@ -81,12 +49,12 @@ pub(crate) fn dispatch(app: &AppHandle, action: Action) {
         }
         // Reopen the newest capture (kept on disk) in the editor.
         Action::Last => {
-            std::thread::spawn(move || {
-                match crate::store::latest_path(&app).and_then(|p| crate::store::load(&p)) {
-                    Some(img) => crate::commands::open_editor_with(&app, img),
-                    None => crate::toast::show_toast_err(&app, "No capture yet"),
-                }
-            });
+            std::thread::spawn(
+                move || match store::latest_path().and_then(|p| store::load(&p)) {
+                    Some(img) => preview::open_editor_with(img),
+                    None => toast::err(&host::host(), "No capture yet"),
+                },
+            );
         }
         Action::Update => {
             if app.state::<UpdateState>().ready.lock().unwrap().is_some() {
@@ -106,30 +74,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    for a in args {
-        if let Some(action) = Action::from_flag(a.as_ref()) {
-            dispatch(app, action);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Action, NAMES};
-
-    #[test]
-    fn names_round_trip() {
-        for (a, n) in NAMES {
-            assert_eq!(a.name(), n);
-            assert_eq!(Action::from_name(n), Some(a));
-            assert_eq!(Action::from_flag(&format!("--{n}")), Some(a));
-        }
-    }
-
-    #[test]
-    fn unknown_flags_are_ignored() {
-        assert_eq!(Action::from_flag("--nope"), None);
-        assert_eq!(Action::from_flag("area"), None); // flags need the dashes
-        assert_eq!(Action::from_name(""), None);
+    for action in Action::from_args(args) {
+        dispatch(app, action);
     }
 }

@@ -1,8 +1,15 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
+};
+
+use crate::capture::Frame;
 use crate::output::trim_memory;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use crate::platform::activate_app;
+use crate::state;
 
 pub(crate) fn build_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
@@ -16,29 +23,6 @@ pub(crate) fn build_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .build()
 }
 
-/// Make this (Accessory-policy) app the active app. Without it macOS ignores
-/// `show()`/`set_focus()` and the window opens behind whatever is frontmost.
-#[cfg(target_os = "macos")]
-pub(crate) fn activate_app() {
-    use objc2::runtime::NSObjectProtocol;
-    use objc2::{MainThreadMarker, msg_send, sel};
-    use objc2_app_kit::NSApplication;
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-    let app = NSApplication::sharedApplication(mtm);
-    // `activate` (macOS 14+) is the cooperative API; older systems need the legacy call.
-    if app.respondsToSelector(sel!(activate)) {
-        // SAFETY: `-[NSApplication activate]` takes no arguments and returns void.
-        unsafe { msg_send![&*app, activate] }
-    } else {
-        #[allow(deprecated)]
-        app.activateIgnoringOtherApps(true);
-    }
-}
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn activate_app() {}
-
 /// Bring a window to the front of everything: activate the app, then show + focus,
 /// all on the main thread (AppKit requirement).
 pub(crate) fn raise(app: &AppHandle, w: &WebviewWindow) {
@@ -49,6 +33,26 @@ pub(crate) fn raise(app: &AppHandle, w: &WebviewWindow) {
         let _ = w.show();
         let _ = w.set_focus();
     });
+}
+
+/// Show the webview selection overlay for a frozen frame (non-macOS, or
+/// `SCRME_WEBVIEW_OVERLAY=1`). Returns false when the window can't be built.
+pub(crate) fn show_web_overlay(app: &AppHandle, frame: Frame, origin: (f64, f64)) -> bool {
+    let (w, h) = frame.size();
+    state::set_frozen(frame);
+    let Some(win) = app
+        .get_webview_window("overlay")
+        .or_else(|| build_overlay(app).ok())
+    else {
+        state::clear_frozen();
+        return false;
+    };
+    let _ = win.set_position(PhysicalPosition::new(origin.0, origin.1));
+    let _ = win.set_size(PhysicalSize::new(w, h));
+    let _ = win.show();
+    let _ = win.set_focus();
+    let _ = win.eval("window.__arm&&window.__arm()");
+    true
 }
 
 pub(crate) fn open_settings(app: &AppHandle) {

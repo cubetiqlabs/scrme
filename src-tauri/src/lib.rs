@@ -1,33 +1,56 @@
 //! scrme: tiny, fast screenshot app. Module map:
-//! `actions` (hotkey/tray/CLI dispatch) · `capture` (freeze + crop) · `output` (clipboard/save) ·
-//! `toast` · `windows` (overlay/settings/editor) · `commands` (webview IPC) · `config` · `state` ·
-//! `tray` · `update`.
+//! `core` (`action`, `capture` freeze + crop, `store`, `output`, `config`, `host`) is
+//! engine-agnostic · `actions` (hotkey/tray/CLI dispatch) · `toast` · `windows`
+//! (overlay/settings/editor) · `commands` (webview IPC) · `tray` · `update` are the Tauri engine.
+//!
+//! The GPUI engine (issue #63) lives in `gpui_app` and reuses the same core through
+//! [`host::Host`].
 
-mod actions;
+mod action;
 mod capture;
-mod commands;
 mod config;
+mod host;
 mod output;
 #[cfg(target_os = "macos")]
 mod pasteboard;
+mod paths;
 mod platform;
 mod preview;
 mod state;
 mod store;
 mod tiff;
 mod toast;
+
+#[cfg(feature = "tauri-app")]
+mod actions;
+#[cfg(feature = "tauri-app")]
+mod commands;
+#[cfg(feature = "tauri-app")]
+mod tauri_host;
+#[cfg(feature = "tauri-app")]
 mod tray;
+#[cfg(feature = "tauri-app")]
 mod update;
+#[cfg(feature = "tauri-app")]
 mod windows;
 
-#[cfg(not(target_os = "macos"))]
-use std::time::Duration;
+#[cfg(feature = "gpui-app")]
+pub mod gpui_app;
 
+#[cfg(feature = "tauri-app")]
+use std::sync::Arc;
+
+#[cfg(feature = "tauri-app")]
 use tauri::Manager;
+#[cfg(feature = "tauri-app")]
 use tauri_plugin_global_shortcut::ShortcutState;
 
-use actions::{Action, dispatch, handle_args};
+#[cfg(feature = "tauri-app")]
+use action::Action;
+#[cfg(feature = "tauri-app")]
+use actions::{dispatch, handle_args};
 
+#[cfg(feature = "tauri-app")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -47,16 +70,13 @@ pub fn run() {
                     if ev.state != ShortcutState::Pressed {
                         return;
                     }
-                    let keys = *app.state::<config::Settings>().keys.lock().unwrap();
+                    let keys = *app.state::<config::Hotkeys>().0.lock().unwrap();
                     if let Some(action) = Action::from_shortcut(&keys, sc) {
                         dispatch(app, action);
                     }
                 })
                 .build(),
         )
-        .manage(state::Frozen::default())
-        .manage(state::Pending::default())
-        .manage(store::Latest::default())
         .manage(update::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::commit,
@@ -83,8 +103,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            config::init(app);
-            store::restore(app.handle());
+            // The core reads the config, the newest capture and the host without an AppHandle.
+            if let Some(dir) = paths::captures_dir() {
+                store::init(dir);
+            }
+            host::install(Arc::new(tauri_host::TauriHost::new(app.handle().clone())));
+            config::init_tauri(app);
             tray::build(app)?;
 
             // Non-macOS: warm the hidden webview overlay/toast in the background so startup
@@ -94,8 +118,8 @@ pub fn run() {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     let _ = windows::build_overlay(&h);
-                    std::thread::sleep(Duration::from_millis(800));
-                    let _ = toast::build_toast(&h, None);
+                    std::thread::sleep(std::time::Duration::from_millis(800));
+                    let _ = toast::build_webview(&h, None);
                 });
             }
             update::spawn_auto_check(app.handle());

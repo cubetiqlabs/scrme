@@ -47,6 +47,20 @@ cd src-tauri && cargo tauri dev
 
 Run the tests with `cargo test --manifest-path src-tauri/Cargo.toml`.
 
+## Two engines (GPUI migration)
+
+The shipped app still runs on Tauri. The move to [GPUI](https://gpui.rs) (issue [#63](https://github.com/cubetiqlabs/scrme/issues/63)) is staged so `main` never regresses: the capture, clipboard, store, toast and preview code is engine-agnostic behind a small `Host` seam, and each engine is a cargo feature.
+
+```sh
+# Tauri engine (default, what releases ship)
+cd src-tauri && cargo tauri dev
+
+# GPUI engine (menu bar, hotkeys, native overlay/toast/preview/pin, GPUI Preferences)
+cd src-tauri && cargo run --no-default-features --features gpui-app --bin scrme-gpui
+```
+
+The GPUI build compiles its Metal shaders, so macOS needs the Metal toolchain (`xcodebuild -downloadComponent MetalToolchain` on Xcode 26). Still Tauri-only in the GPUI build: the annotation editor (port in progress; captures are copied instead) and signed in-app updates.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). AI agents: see [AGENTS.md](AGENTS.md).
