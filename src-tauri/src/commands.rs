@@ -1,6 +1,3 @@
-use std::time::Instant;
-
-use crate::{capture::*, config::*, output::*, state::*, tray::*, windows::*};
 use image::RgbaImage;
 use serde::Serialize;
 use tauri::ipc::Response;
@@ -8,57 +5,28 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+use crate::capture;
+use crate::config::{self, Config, Hotkeys, Keys, apply_autostart};
+use crate::host;
+use crate::output::trim_memory;
+use crate::paths;
+use crate::preview;
+use crate::state;
+use crate::store;
+use crate::tray::sync_menu_keys;
+use crate::windows;
+
 #[tauri::command]
-pub(crate) fn commit(
-    app: AppHandle,
-    state: tauri::State<Frozen>,
-    x: i64,
-    y: i64,
-    w: i64,
-    h: i64,
-    edit: bool,
-) {
+pub(crate) fn commit(app: AppHandle, x: i64, y: i64, w: i64, h: i64, edit: bool) {
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
-    commit_selection(&app, &state, x, y, w, h, edit);
-}
-
-/// Crop the frozen frame to the selection, then copy it (or open the editor).
-/// Shared by the webview overlay command and the native overlay.
-pub(crate) fn commit_selection(
-    app: &AppHandle,
-    state: &Frozen,
-    x: i64,
-    y: i64,
-    w: i64,
-    h: i64,
-    edit: bool,
-) {
-    let t = Instant::now();
-    let Some(frame) = state.0.lock().unwrap().take() else {
-        return;
-    };
-    let (iw, ih) = frame.size();
-    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, iw, ih) else {
-        return;
-    };
-    let Some(crop) = frame.crop(cx, cy, cw, ch) else {
-        return;
-    };
-    drop(frame); // release the screenshot before the (slower) clipboard/editor work
-    if edit {
-        *app.state::<Pending>().0.lock().unwrap() = Some(crop);
-        open_editor(app, cw, ch);
-    } else {
-        finish(app, crop);
-    }
-    eprintln!("commit {:?}", t.elapsed());
+    capture::commit_selection(x, y, w, h, edit);
 }
 
 #[tauri::command]
-pub(crate) fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
-    state.0.lock().unwrap().take();
+pub(crate) fn cancel(app: AppHandle) {
+    state::clear_frozen();
     if let Some(win) = app.get_webview_window("overlay") {
         let _ = win.hide();
     }
@@ -66,24 +34,15 @@ pub(crate) fn cancel(app: AppHandle, state: tauri::State<Frozen>) {
 }
 
 #[tauri::command]
-pub(crate) fn edit_size(state: tauri::State<Pending>) -> Option<(u32, u32)> {
-    state
-        .0
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|i| (i.width(), i.height()))
+pub(crate) fn edit_size() -> Option<(u32, u32)> {
+    state::pending_size()
 }
 
 #[tauri::command]
-pub(crate) fn edit_bytes(state: tauri::State<Pending>) -> Response {
+pub(crate) fn edit_bytes() -> Response {
     // The editor loads once: hand the buffer over instead of cloning it (halves peak memory).
     Response::new(
-        state
-            .0
-            .lock()
-            .unwrap()
-            .take()
+        state::take_pending()
             .map(|i| i.into_raw())
             .unwrap_or_default(),
     )
@@ -99,27 +58,20 @@ pub(crate) fn rgba_from(req: &tauri::ipc::Request) -> Option<RgbaImage> {
 }
 
 #[tauri::command]
-pub(crate) fn copy_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+pub(crate) fn copy_rgba(req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    copy_image(&app, &img);
-    crate::store::replace_latest(&app, &img);
+    host::host().copy_image(&img);
+    store::replace_latest(&img);
     trim_memory();
     Ok(())
 }
 
-/// Put an image in the editor (the preview's Edit button, ⇧-release).
-pub(crate) fn open_editor_with(app: &AppHandle, img: RgbaImage) {
-    let (w, h) = img.dimensions();
-    *app.state::<Pending>().0.lock().unwrap() = Some(img);
-    open_editor(app, w, h);
-}
-
 /// Float the edited screenshot above everything (native window; macOS only for now).
 #[tauri::command]
-pub(crate) fn pin_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+pub(crate) fn pin_rgba(req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    crate::store::replace_latest(&app, &img);
-    crate::preview::show_pin(&app, img)
+    store::replace_latest(&img);
+    preview::show_pin(&host::host(), img)
 }
 
 /// Plain text to the clipboard (e.g. the eyedropper's hex).
@@ -129,27 +81,27 @@ pub(crate) fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn save_rgba(app: AppHandle, req: tauri::ipc::Request) -> Result<String, String> {
+pub(crate) fn save_rgba(req: tauri::ipc::Request) -> Result<String, String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    let path = save_png(&img)?;
-    crate::store::replace_latest(&app, &img);
+    let path = crate::output::save_png(&img)?;
+    store::replace_latest(&img);
     Ok(path)
 }
 
 /// Persist the editor's current canvas as the latest capture (called when closing it).
 #[tauri::command]
-pub(crate) fn commit_editor(app: AppHandle, req: tauri::ipc::Request) -> Result<(), String> {
+pub(crate) fn commit_editor(req: tauri::ipc::Request) -> Result<(), String> {
     let img = rgba_from(&req).ok_or("bad image")?;
-    crate::store::replace_latest(&app, &img);
+    store::replace_latest(&img);
     trim_memory();
     Ok(())
 }
 
 #[tauri::command]
-pub(crate) fn close_editor(app: AppHandle, state: tauri::State<Pending>) {
-    state.0.lock().unwrap().take();
+pub(crate) fn close_editor(app: AppHandle) {
+    state::take_pending();
     // Hide + release the image, keep the webview warm briefly (instant re-open), then destroy it.
-    park_editor(&app);
+    windows::park_editor(&app);
     trim_memory();
 }
 
@@ -208,20 +160,17 @@ pub(crate) fn default_config() -> Config {
 }
 
 #[tauri::command]
-pub(crate) fn get_config(state: tauri::State<Settings>) -> Config {
-    state.cfg.lock().unwrap().clone()
+pub(crate) fn get_config() -> Config {
+    config::current()
 }
 
 /// Validate, re-register hotkeys live (rolling back on failure), persist.
 #[tauri::command]
-pub(crate) fn set_config(
-    app: AppHandle,
-    state: tauri::State<Settings>,
-    cfg: Config,
-) -> Result<(), String> {
+pub(crate) fn set_config(app: AppHandle, cfg: Config) -> Result<(), String> {
     let new = Keys::parse(&cfg)?;
-    let old = *state.keys.lock().unwrap();
-    let was_login = state.cfg.lock().unwrap().launch_at_login;
+    let state = app.state::<Hotkeys>();
+    let old = *state.0.lock().unwrap();
+    let was_login = config::current().launch_at_login;
     apply_autostart(&app, cfg.launch_at_login)?;
     let gs = app.global_shortcut();
     let register = |k: Keys| -> Result<(), String> {
@@ -236,9 +185,11 @@ pub(crate) fn set_config(
         let _ = apply_autostart(&app, was_login);
         return Err(e);
     }
-    *state.keys.lock().unwrap() = new;
-    let _ = write_config(&app, &cfg);
+    *state.0.lock().unwrap() = new;
+    if let Some(path) = paths::config_path() {
+        let _ = config::save(&path, &cfg);
+    }
     sync_menu_keys(&app, &cfg);
-    *state.cfg.lock().unwrap() = cfg;
+    config::set(cfg);
     Ok(())
 }

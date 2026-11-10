@@ -46,6 +46,31 @@ jobs:
           workspaces: src-tauri
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
+  gpui:
+    name: GPUI engine
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal --component clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: gpui
+      # GPUI compiles its renderer's shaders with `xcrun metal`; Xcode 26 keeps that
+      # compiler in a downloadable component, older images ship it with the toolchain.
+      - name: Metal toolchain
+        run: |
+          if ! xcrun -f metal >/dev/null 2>&1; then
+            sudo xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun metal --version
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --lib
+      - name: Build the GPUI binary
+        run: cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --bin scrme-gpui
+
   scripts:
     name: Scripts & workflows
     runs-on: ubuntu-latest

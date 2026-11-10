@@ -7,34 +7,44 @@
 use std::sync::Arc;
 
 use image::RgbaImage;
-use tauri::AppHandle;
 
+use crate::host::Host;
 #[cfg(not(target_os = "macos"))]
-use crate::toast::show_toast;
+use crate::toast::{self, Kind};
+
+/// Hand a cropped image to the editor: the buffer moves into `state`, the engine opens
+/// (or focuses) its editor window at this size.
+pub(crate) fn open_editor_with(img: RgbaImage) {
+    let (w, h) = img.dimensions();
+    crate::state::set_pending(img);
+    crate::host::host().open_editor(w, h);
+}
 
 /// After a capture: a small preview in the corner (auto-dismisses unless hovered). The
 /// capture itself must already be (being) written as the latest capture (`store`).
-pub(crate) fn show_preview(app: &AppHandle, img: &RgbaImage) {
+pub(crate) fn show_preview(host: &Arc<dyn Host>, img: &RgbaImage) {
     #[cfg(target_os = "macos")]
-    macos::present(app, img, macos::Source::Latest);
+    macos::present(host.clone(), img, macos::Source::Latest);
     #[cfg(not(target_os = "macos"))]
     {
         let _ = img;
-        show_toast(app, "Copied");
+        toast::show(host, Kind::Ok, "Copied");
     }
 }
 
 /// A persistent pin (editor's Pin button). The user asked to keep it, so it owns its image.
-pub(crate) fn show_pin(app: &AppHandle, img: RgbaImage) -> Result<(), String> {
+/// Used by the Tauri editor's Pin button; the GPUI editor (phase 3) will use it too.
+#[cfg_attr(not(feature = "tauri-app"), allow(dead_code))]
+pub(crate) fn show_pin(host: &Arc<dyn Host>, img: RgbaImage) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let img = Arc::new(img);
-        macos::present(app, &img, macos::Source::Mem(img.clone()));
+        macos::present(host.clone(), &img, macos::Source::Mem(img.clone()));
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (app, img);
+        let _ = (host, img);
         Err("Pin to screen is only available on macOS for now".into())
     }
 }
@@ -48,14 +58,11 @@ mod macos {
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSModalResponseOK, NSSavePanel};
     use objc2_foundation::NSString;
-    use tauri::AppHandle;
 
-    use crate::commands::open_editor_with;
-    use crate::output::copy_image;
+    use crate::host::Host;
     use crate::platform::pin_macos::{self, Action, Options};
     use crate::store;
-    use crate::toast::{show_toast, show_toast_err};
-    use crate::windows::activate_app;
+    use crate::toast;
 
     const THUMB_LONG_EDGE: u32 = 720;
     const PREVIEW_BOX: (f64, f64) = (300.0, 210.0);
@@ -67,20 +74,21 @@ mod macos {
         /// The newest capture, kept on disk by `store` (previews).
         Latest,
         /// An image the user pinned on purpose (kept in memory).
+        #[cfg_attr(not(feature = "tauri-app"), allow(dead_code))]
         Mem(Arc<RgbaImage>),
     }
 
     impl Source {
-        fn file(&self, app: &AppHandle) -> Option<PathBuf> {
+        fn file(&self) -> Option<PathBuf> {
             match self {
-                Source::Latest => store::latest_path(app),
-                Source::Mem(img) => store::write_scratch(app, img),
+                Source::Latest => store::latest_path(),
+                Source::Mem(img) => store::write_scratch(img),
             }
         }
 
-        fn image(&self, app: &AppHandle) -> Option<RgbaImage> {
+        fn image(&self) -> Option<RgbaImage> {
             match self {
-                Source::Latest => store::latest_path(app).and_then(|p| store::load(&p)),
+                Source::Latest => store::latest_path().and_then(|p| store::load(&p)),
                 Source::Mem(img) => Some((**img).clone()),
             }
         }
@@ -114,7 +122,7 @@ mod macos {
         image::imageops::thumbnail(&mid, tw, th)
     }
 
-    pub(super) fn present(app: &AppHandle, img: &RgbaImage, source: Source) {
+    pub(super) fn present(host: Arc<dyn Host>, img: &RgbaImage, source: Source) {
         let preview = matches!(source, Source::Latest);
         let (w, h) = img.dimensions();
         // The preview only needs a small picture; the full image is read from disk on demand.
@@ -123,8 +131,8 @@ mod macos {
         } else {
             crate::tiff::rgb_tiff(img)
         };
-        let handle = app.clone();
-        let _ = app.run_on_main_thread(move || {
+        let cb_host = host.clone();
+        let shown = host.on_main(Box::new(move || {
             let Some(mtm) = MainThreadMarker::new() else {
                 return;
             };
@@ -132,8 +140,8 @@ mod macos {
                 pin_macos::dismiss_previews(); // a new capture replaces the old preview
             }
             let drag = preview.then(|| {
-                let (app, source) = (handle.clone(), source.clone());
-                Box::new(move || source.file(&app)) as Box<dyn Fn() -> Option<PathBuf>>
+                let source = source.clone();
+                Box::new(move || source.file()) as Box<dyn Fn() -> Option<PathBuf>>
             });
             let opts = if preview {
                 Options {
@@ -150,50 +158,52 @@ mod macos {
                     drag: None,
                 }
             };
-            let app = handle.clone();
+            let cb_source = source.clone();
+            let act_host = cb_host.clone();
             pin_macos::show(mtm, tiff, (w, h), opts, move |action| {
-                act(&app, &source, action, mtm)
+                act(&act_host, &cb_source, action, mtm)
             });
             if preview {
-                // Building a webview takes a while: do it after the preview is visible, off the
-                // main thread, so "Edit" opens instantly without delaying the preview.
-                let app = handle.clone();
-                std::thread::spawn(move || crate::windows::prewarm_editor(&app));
+                // Building the editor costs a moment: warm it after the preview is visible so
+                // "Edit" opens instantly without delaying the preview.
+                let warm = cb_host.clone();
+                std::thread::spawn(move || warm.prewarm_editor());
             }
-        });
+        }));
+        let _ = shown;
     }
 
-    fn act(app: &AppHandle, source: &Source, action: Action, mtm: MainThreadMarker) {
+    fn act(host: &Arc<dyn Host>, source: &Source, action: Action, mtm: MainThreadMarker) {
         match action {
             Action::Close => {}
             Action::Copy => {
-                let (app, source) = (app.clone(), source.clone());
-                std::thread::spawn(move || match source.image(&app) {
+                let (host, source) = (host.clone(), source.clone());
+                std::thread::spawn(move || match source.image() {
                     Some(img) => {
-                        copy_image(&app, &img);
-                        show_toast(&app, "Copied");
+                        host.copy_image(&img);
+                        toast::ok(&host, "Copied");
                     }
-                    None => show_toast_err(&app, "Capture not found"),
+                    None => toast::err(&host, "Capture not found"),
                 });
             }
             Action::Edit => {
-                let (app, source) = (app.clone(), source.clone());
-                std::thread::spawn(move || match source.image(&app) {
-                    Some(img) => open_editor_with(&app, img),
-                    None => show_toast_err(&app, "Capture not found"),
+                let (host, source) = (host.clone(), source.clone());
+                std::thread::spawn(move || match source.image() {
+                    Some(img) => super::open_editor_with(img),
+                    None => toast::err(&host, "Capture not found"),
                 });
             }
-            Action::SaveAs => save_as(app, source, mtm),
+            Action::SaveAs => save_as(host, source, mtm),
         }
     }
 
     /// Native "Save as…" panel (we are on the main thread: it is called from a button click).
     /// The capture is already a PNG on disk, so saving is a file copy (no re-encode).
-    fn save_as(app: &AppHandle, source: &Source, mtm: MainThreadMarker) {
-        activate_app();
+    fn save_as(host: &Arc<dyn Host>, source: &Source, mtm: MainThreadMarker) {
+        crate::platform::activate_app();
         let panel = NSSavePanel::savePanel(mtm);
         let name = source
-            .file(app)
+            .file()
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
             .unwrap_or_else(|| "scrme.png".into());
         panel.setNameFieldStringValue(&NSString::from_str(&name));
@@ -204,12 +214,12 @@ mod macos {
             return;
         };
         let saved = source
-            .file(app)
+            .file()
             .is_some_and(|f| std::fs::copy(f, &dest).is_ok());
         if saved {
-            show_toast(app, "Saved");
+            toast::ok(host, "Saved");
         } else {
-            show_toast_err(app, "Save failed");
+            toast::err(host, "Save failed");
         }
     }
 }

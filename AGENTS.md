@@ -1,12 +1,14 @@
 # AGENTS.md
 
-Guide for AI coding agents (and humans) working on **scrme**: a tiny, fast, open-source (MIT) screenshot app. Tauri 2 + Rust backend, vanilla HTML/JS frontend, macOS first.
+Guide for AI coding agents (and humans) working on **scrme**: a tiny, fast, open-source (MIT) screenshot app. Tauri 2 + Rust backend, vanilla HTML/JS frontend, macOS first. A GPUI engine is being built alongside Tauri (issue #63).
 
 ## Layout
 
 ```
-src-tauri/src/        lib.rs (wiring) · actions (hotkey/tray/CLI dispatch) · capture · output (clipboard/save) ·
-                       toast · windows (overlay/settings/editor + raise) · commands (webview IPC) · config · state · tray · update
+src-tauri/src/        lib.rs (wiring) · action.rs (shared action table) · host.rs (engine seam) · paths.rs ·
+                       capture · output (clipboard/save) · toast · preview · config · state · store ·
+                       tauri_host.rs + windows/commands/actions/tray/update (Tauri engine) ·
+                       gpui_app/ (GPUI engine: tray, hotkeys, settings, autostart, single instance)
 src-tauri/icons/       app icons; tray.png = menu bar template icon
 src/                   frontend, no bundler: overlay (area select), editor, settings, toast
 src/shared/           theme.css (palette), mascot.js/css (+ combo.js), reused by Preferences and the toast
@@ -16,13 +18,28 @@ scripts/measure.sh     memory/threads/CPU snapshot of the app + WebKit helpers
 install.sh             one-line macOS installer (downloads latest release .dmg)
 ```
 
+## Engines (issue #63)
+
+The same core runs under two cargo features; `tauri-app` is the default and the only one releases ship.
+
+- **Shared core** (no engine imports): `capture`, `output`, `store`, `preview`, `toast`, `config`, `state`, `action`, `paths`. Platform work goes through the `Host` trait installed at startup (`host::install`); add a job there once and implement it in `tauri_host.rs` and `gpui_app/host.rs`.
+- **Tauri engine**: `lib.rs`, `windows.rs`, `commands.rs`, `actions.rs`, `tray.rs`, `update.rs`, web frontend.
+- **GPUI engine**: `gpui_app/*` + `gpui_main.rs` (`scrme-gpui`). Native macOS overlay/toast/preview/pin are shared; Preferences is a GPUI view; the tray and global hotkeys use `tray-icon`/`muda`/`global-hotkey` (what Tauri wraps, so config shortcut strings match). No editor yet (copies the capture) and no updater (phase 4). Idle (dev build, menu bar only) it measured 11 MB physical footprint and 0.0% CPU.
+
+Never let a GPUI change regress the Tauri build: both feature sets must compile, and shared code must stay engine-agnostic.
+
 ## Commands
 
 ```sh
-cd src-tauri && cargo tauri dev                                  # run
+cd src-tauri && cargo tauri dev                                  # run (Tauri)
 cargo test --manifest-path src-tauri/Cargo.toml                  # tests
 cargo fmt --manifest-path src-tauri/Cargo.toml                   # format
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings # lint
+
+# GPUI engine (Metal toolchain required: xcodebuild -downloadComponent MetalToolchain)
+cargo run   --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --bin scrme-gpui
+cargo test  --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --lib
+cargo clippy --manifest-path src-tauri/Cargo.toml --no-default-features --features gpui-app --all-targets -- -D warnings
 ```
 
 CI uses the latest stable toolchain, so `rustup update stable` first; an older local clippy misses new lints (CI once failed on `chunks_exact` → `as_chunks`).

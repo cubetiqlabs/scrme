@@ -1,8 +1,8 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::config::Settings;
-use crate::toast::*;
+use crate::config;
+use crate::toast;
 use tauri::menu::MenuItem;
 use tauri::{AppHandle, Manager};
 
@@ -20,13 +20,13 @@ pub(crate) async fn do_update(app: &AppHandle, manual: bool) -> Result<Option<St
     let updater = app.updater().map_err(|e| e.to_string())?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         if manual {
-            show_toast(app, "Up to date");
+            toast::ok_now("Up to date");
         }
         return Ok(None);
     };
     let v = update.version.clone();
     if manual {
-        show_toast(app, "Updating…");
+        toast::ok_now("Updating…");
     }
     update
         .download_and_install(|_, _| {}, || {})
@@ -37,7 +37,7 @@ pub(crate) async fn do_update(app: &AppHandle, manual: bool) -> Result<Option<St
     if let Some(item) = st.item.lock().unwrap().as_ref() {
         let _ = item.set_text(format!("↻  Restart to update to v{v}"));
     }
-    show_toast(app, "Restart to update");
+    toast::ok_now("Restart to update");
     Ok(Some(v))
 }
 
@@ -55,7 +55,7 @@ pub(crate) async fn run_update(app: &AppHandle, manual: bool) -> Result<Option<S
     if let Err(e) = &res {
         eprintln!("update check failed: {e}");
         if manual {
-            show_toast_err(app, "Update failed");
+            toast::err_now("Update failed");
         }
     }
     res
@@ -82,7 +82,7 @@ pub(crate) fn spawn_auto_check(app: &tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(8));
         loop {
-            if h.state::<Settings>().cfg.lock().unwrap().auto_update {
+            if config::current().auto_update {
                 let _ = tauri::async_runtime::block_on(run_update(&h, false));
             }
             std::thread::sleep(std::time::Duration::from_secs(6 * 3600));

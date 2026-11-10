@@ -3,10 +3,14 @@ pub(crate) mod geometry;
 #[cfg(target_os = "macos")]
 mod macos;
 
+use std::sync::Arc;
 use std::time::Instant;
 
-use crate::{output::*, state::*, toast::*, windows::*};
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
+use crate::host::{self, Host};
+use crate::output::{self, trim_memory};
+use crate::preview;
+use crate::state;
+use crate::toast;
 
 pub(crate) use frame::Frame;
 
@@ -35,10 +39,10 @@ pub(crate) fn primary_monitor() -> Option<xcap::Monitor> {
 
 /// Freeze the primary monitor. Returns the frame and the monitor's origin in physical pixels.
 /// macOS keeps a CGImage (cheap); anything else, or a failure, falls back to xcap's RGBA copy.
-pub(crate) fn freeze_primary() -> Option<(Frame, PhysicalPosition<f64>)> {
+pub(crate) fn freeze_primary() -> Option<(Frame, (f64, f64))> {
     let mon = primary_monitor()?;
     let scale = mon.scale_factor().unwrap_or(1.0) as f64;
-    let origin = PhysicalPosition::new(
+    let origin = (
         mon.x().unwrap_or(0) as f64 * scale,
         mon.y().unwrap_or(0) as f64 * scale,
     );
@@ -51,101 +55,116 @@ pub(crate) fn freeze_primary() -> Option<(Frame, PhysicalPosition<f64>)> {
         .map(|img| (Frame::Rgba(img), origin))
 }
 
-/// Freeze the primary monitor, then show the (pre-built) transparent overlay.
-pub(crate) fn start_area_capture(app: &AppHandle) {
+/// Freeze the primary monitor, then show the overlay (native on macOS).
+pub(crate) fn start_area_capture() {
+    let host = host::host();
     let t = Instant::now();
     // ponytail: primary monitor only; one overlay per monitor for multi-display.
-    let Some((frame, pos)) = freeze_primary() else {
+    let Some((frame, origin)) = freeze_primary() else {
         eprintln!("capture failed (Screen Recording permission?)");
-        show_toast_err(app, "Capture failed");
+        toast::err(&host, "Capture failed");
         return;
     };
-    let (w, h) = frame.size();
 
+    // The engine's own overlay (webview on Tauri) takes over when the native one can't run.
     #[cfg(target_os = "macos")]
-    let frame = match native_overlay(app, frame) {
-        Ok(()) => {
-            eprintln!("hotkey→native overlay {:?}", t.elapsed());
-            return;
+    match native_overlay(frame, &host) {
+        Ok(()) => eprintln!("hotkey→native overlay {:?}", t.elapsed()),
+        Err(frame) => {
+            if host.show_web_overlay(frame, origin) {
+                eprintln!("hotkey→overlay {:?}", t.elapsed());
+            } else {
+                toast::err(&host, "Capture failed");
+            }
         }
-        Err(frame) => frame,
-    };
+    }
 
-    *app.state::<Frozen>().0.lock().unwrap() = Some(frame);
-
-    let Some(win) = app
-        .get_webview_window("overlay")
-        .or_else(|| build_overlay(app).ok())
-    else {
-        return;
-    };
-    let _ = win.set_position(pos);
-    let _ = win.set_size(PhysicalSize::new(w, h));
-    let _ = win.show();
-    let _ = win.set_focus();
-    let _ = win.eval("window.__arm&&window.__arm()");
-    eprintln!("hotkey→overlay {:?}", t.elapsed());
+    #[cfg(not(target_os = "macos"))]
+    {
+        if !host.show_web_overlay(frame, origin) {
+            toast::err(&host, "Capture failed");
+        }
+    }
 }
 
 /// Show the native overlay for a CGImage frame. Gives the frame back when it can't
-/// (other pixel source, or `SCRME_WEBVIEW_OVERLAY=1`) so the webview overlay takes over.
+/// (other pixel source, or `SCRME_WEBVIEW_OVERLAY=1`) so the engine's overlay takes over.
 #[cfg(target_os = "macos")]
-fn native_overlay(app: &AppHandle, frame: Frame) -> Result<(), Frame> {
-    use crate::commands::commit_selection;
+fn native_overlay(frame: Frame, host: &Arc<dyn Host>) -> Result<(), Frame> {
     use crate::platform::overlay_macos::{self, SendImage};
 
     let Frame::Cg(cg) = &frame else {
         return Err(frame);
     };
+    // Only the Tauri engine has a webview overlay to fall back to.
+    #[cfg(feature = "tauri-app")]
     if std::env::var_os("SCRME_WEBVIEW_OVERLAY").is_some() {
         return Err(frame);
     }
     let image = SendImage(cg.image());
-    *app.state::<Frozen>().0.lock().unwrap() = Some(frame);
+    state::set_frozen(frame);
 
-    let handle = app.clone();
-    let shown = app.run_on_main_thread(move || {
+    let shown = host.on_main(Box::new(move || {
         let Some(mtm) = objc2::MainThreadMarker::new() else {
             return;
         };
-        activate_app(); // an Accessory app must be active to receive key events (Esc)
-        let app = handle.clone();
+        crate::platform::activate_app(); // an Accessory app must be active to receive key events (Esc)
         overlay_macos::show(mtm, &image.0, move |sel| {
             // Already on the main thread: hand the heavy work (crop, clipboard) to a worker.
-            let app = app.clone();
             std::thread::spawn(move || match sel {
-                Some(s) => {
-                    commit_selection(&app, &app.state::<Frozen>(), s.x, s.y, s.w, s.h, s.edit)
-                }
+                Some(s) => commit_selection(s.x, s.y, s.w, s.h, s.edit),
                 None => {
-                    app.state::<Frozen>().0.lock().unwrap().take();
+                    state::clear_frozen();
                     trim_memory();
                 }
             });
         });
-    });
-    if shown.is_err() {
-        app.state::<Frozen>().0.lock().unwrap().take();
+    }));
+    if !shown {
+        state::clear_frozen();
     }
     Ok(())
 }
 
-pub(crate) fn capture_full(app: &AppHandle) {
+/// Crop the frozen frame to the selection, then copy it (or open the editor).
+/// Shared by the engine overlay command and the native overlay.
+pub(crate) fn commit_selection(x: i64, y: i64, w: i64, h: i64, edit: bool) {
+    let t = Instant::now();
+    let Some(frame) = state::take_frozen() else {
+        return;
+    };
+    let (iw, ih) = frame.size();
+    let Some((cx, cy, cw, ch)) = clamp_rect(x, y, w, h, iw, ih) else {
+        return;
+    };
+    let Some(crop) = frame.crop(cx, cy, cw, ch) else {
+        return;
+    };
+    drop(frame); // release the screenshot before the (slower) clipboard/editor work
+    if edit {
+        preview::open_editor_with(crop);
+    } else {
+        output::finish(crop);
+    }
+    eprintln!("commit {:?}", t.elapsed());
+}
+
+pub(crate) fn capture_full() {
     match freeze_primary().and_then(|(frame, _)| frame.into_rgba()) {
-        Some(img) => finish(app, img),
-        None => show_toast_err(app, "Capture failed"),
+        Some(img) => output::finish(img),
+        None => toast::err(&host::host(), "Capture failed"),
     }
 }
 
 /// Focused window of the frontmost app (we are an Accessory app, so never ourselves).
-pub(crate) fn capture_window(app: &AppHandle) {
+pub(crate) fn capture_window() {
     let win = xcap::Window::all().ok().and_then(|w| {
         w.into_iter()
             .find(|w| w.is_focused().unwrap_or(false) && !w.is_minimized().unwrap_or(true))
     });
     match win.and_then(|w| w.capture_image().ok()) {
-        Some(img) => finish(app, img),
-        None => show_toast_err(app, "No window found"),
+        Some(img) => output::finish(img),
+        None => toast::err(&host::host(), "No window found"),
     }
 }
 

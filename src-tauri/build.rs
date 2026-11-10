@@ -37,5 +37,8 @@ fn main() {
     println!("cargo:rustc-env=SCRME_BUILT={}", iso_utc());
     // Refresh when HEAD moves (commit/checkout); the reflog changes on both.
     println!("cargo:rerun-if-changed=../.git/logs/HEAD");
-    tauri_build::build()
+    // The GPUI build has no tauri context to generate.
+    if std::env::var_os("CARGO_FEATURE_TAURI_APP").is_some() {
+        tauri_build::build()
+    }
 }
